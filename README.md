@@ -1,0 +1,1 @@
+A Python-based computer vision system designed to automatically detect when a TV commercial has ended and notify the user in real time. The system operates in a client–server architecture and uses deep learning models to identify both the presence of a television in the camera feed and the type of content currently being displayed (commercial vs. actual program content).
