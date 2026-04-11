@@ -1,4 +1,3 @@
-
 """
 Main entry point for the TV Detector Client application.
 Orchestrates the interaction between the UI, camera, image processing, and network modules.
@@ -6,11 +5,13 @@ Orchestrates the interaction between the UI, camera, image processing, and netwo
 
 import tkinter as tk
 import cv2
-from login_window import LoginWindow
+import json
+import os
 from main_ui import MainUI
 from camera_manager import CameraManager
 from image_processor import ImageProcessor
 from network_manager import NetworkManager
+from Alerting.PhoneConnectorUI import PhoneConnector
 
 # --- Constants ---
 DISPLAY_WIDTH = 640
@@ -122,11 +123,11 @@ class AppController:
         """Toggles the automatic capture process on/off."""
         self.is_running = not self.is_running
         if self.is_running:
-            self.ui.btn_toggle.config(text="Stop Capturing", bg="red", fg="black")
+            self.ui.btn_toggle.config(text="⏸ Stop Capturing", bg="#ff4444", fg="white")
             self.frame_counter = 0
             self.is_capturing_phase = True
         else:
-            self.ui.btn_toggle.config(text="Start Capturing", bg="green", fg="black")
+            self.ui.btn_toggle.config(text="▶ Start Capturing", bg="#128C7E", fg="white")
 
     def switch_camera(self):
         """Switches to the next available camera source."""
@@ -174,14 +175,27 @@ class AppController:
         pass
 
 if __name__ == '__main__':
-    # Step 1: Create and run the login window first.
-    login = LoginWindow()
-    phone_number = login.run() # This will block until the login window is closed.
-
-    # Step 2: Only if login was successful, create and run the main app.
+    # Step 1: Create and run the phone connector window.
+    login_root = tk.Tk()
+    phone_connector = PhoneConnector(login_root)
+    login_root.mainloop()
+    
+    # Step 2: Read the phone number from the config file.
+    config_file = "Alerting/user_config.json"
+    phone_number = None
+    
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r") as f:
+                config_data = json.load(f)
+                phone_number = config_data.get("user_number")
+        except Exception as e:
+            print(f"Error reading config file: {e}")
+    
+    # Step 3: Only if phone number was obtained, create and run the main app.
     if phone_number:
         root = tk.Tk()
         app = AppController(root, phone_number)
         root.mainloop()
     else:
-        print("Login cancelled. Exiting.")
+        print("Phone number not set. Exiting.")

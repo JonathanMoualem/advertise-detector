@@ -48,6 +48,7 @@ class PhoneConnector:
         self.num_entry = tk.Entry(self.input_frame, font=("Arial", 12), width=25)
         self.num_entry.pack(pady=10)
         self.num_entry.insert(0, "+972")
+        self.num_entry.bind("<Return>", lambda e: self.save_and_next())
 
         tk.Button(self.input_frame, text="Next: Connect WhatsApp", command=self.save_and_next, bg="#128C7E", fg="white",
                   font=("Arial", 10, "bold"), pady=10).pack(pady=20)
@@ -101,8 +102,14 @@ class PhoneConnector:
         tk.Label(self.qr_frame, text=f"Send '{self.sandbox_code}' to {self.twilio_num}", bg="#2b2b2b",
                  fg="white", font=("Arial", 9)).pack()
 
-        tk.Button(self.qr_frame, text="Finish Setup", command=self.root.destroy, bg="#128C7E", fg="white",
+        tk.Button(self.qr_frame,
+                  text="Finished Connecting whatsapp",
+                  command=self.root.destroy, bg="#128C7E",
+                  fg="white",
                   font=("Arial", 10, "bold"), pady=8).pack(pady=20)
+        
+        # Bind Enter key to finish setup
+        self.root.bind("<Return>", lambda e: self.root.destroy())
 
     @staticmethod
     def set_dark_title_bar(window):
