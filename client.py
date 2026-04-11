@@ -44,6 +44,7 @@ class AppController:
         self.frame_counter = 0
         self.is_capturing_phase = True
         self.frames_to_send, self.frames_to_wait = MODE_PARAMS[DEFAULT_MODE]
+        PhoneConnector.set_dark_title_bar(self.master)
 
         # --- UI Initialization ---
         self.ui = MainUI(self.master, self.get_callbacks())
