@@ -8,9 +8,7 @@ from tkinter import messagebox
 import qrcode
 from PIL import ImageTk
 
-from Alerting.Alerts import SANDBOX_CODE, TWILIO_NUMBER
-
-CONFIG_FILE = "user_config.json"
+from Alerting.Alerts import SANDBOX_CODE, TWILIO_NUMBER, USER_CONFIG_FILE
 
 
 class PhoneConnector:
@@ -63,7 +61,7 @@ class PhoneConnector:
             return
 
         # Save to file
-        with open(CONFIG_FILE, "w") as f:
+        with open(USER_CONFIG_FILE, "w") as f:
             json.dump({"user_number": number}, f)
 
         # Switch Scenes

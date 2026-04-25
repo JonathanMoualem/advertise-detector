@@ -202,3 +202,29 @@ class MainUI:
         self.canvas.delete("all")
         self.canvas.create_text(self.display_width/2, self.display_height/2, text=message, fill=color, 
                                justify=tk.CENTER, font=(FONT_FAMILY, 14, FONT_WEIGHT_BOLD))
+
+    def show_notification_popup(self, message):
+        """
+        Displays a small popup window in the top-left corner of the camera view with a bell icon and message.
+        Automatically closes after 3 seconds.
+        """
+        # Calculate position: Top-left of the canvas (relative to the main window)
+        canvas_x = self.master.winfo_rootx() + self.canvas.winfo_x()
+        canvas_y = self.master.winfo_rooty() + self.canvas.winfo_y()
+        
+        # Create popup window
+        popup = tk.Toplevel(self.master)
+        popup.geometry(f"250x60+{canvas_x}+{canvas_y}")  # Small size, positioned at top-left
+        popup.overrideredirect(True)  # No title bar
+        popup.attributes("-topmost", True)  # Always on top
+        popup.configure(bg=BG_SECONDARY)
+        
+        # Add bell icon and message
+        icon_label = tk.Label(popup, text="🔔", font=(FONT_FAMILY, 15), bg=BG_SECONDARY, fg=FG_PRIMARY)
+        icon_label.pack(side=tk.LEFT, padx=10, pady=10)
+        
+        msg_label = tk.Label(popup, text=message, font=(FONT_FAMILY, 8), bg=BG_SECONDARY, fg=FG_PRIMARY, wraplength=200)
+        msg_label.pack(side=tk.LEFT, padx=10, pady=10)
+        
+        # Auto-close after 3 seconds
+        popup.after(3000, popup.destroy)

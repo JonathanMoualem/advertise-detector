@@ -8,6 +8,8 @@ TWILIO_AUTH_TOKEN = 'FILL'
 TWILIO_NUMBER="+14155238886"
 PROJECT_NUMBER = f'whatsapp:{TWILIO_NUMBER}'  # This is usually the default Sandbox number
 SANDBOX_CODE="join cold-command"
+USER_CONFIG_FILE = "Alerting/user_config.json"
+
 
 
 USER_NUMBER = 'whatsapp:+972526031919'  # Your actual phone number with country code

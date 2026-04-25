@@ -14,6 +14,9 @@ from flask import Flask, request, jsonify
 # --- Constants ---
 UPLOADS_DIR = 'uploads'
 
+# Notification queue (list of dicts: {'message': str, 'phone_number': str})
+notifications = []
+
 app = Flask(__name__)
 
 # --- Server Setup ---
@@ -34,6 +37,7 @@ def upload_file():
     file = request.files['image']
     if file.filename == '':
         return jsonify({'error': 'No image selected for uploading'}), 400
+
 
     # --- 2. Get Metadata ---
     phone_number = request.form.get('phone_number', 'unknown')
@@ -68,6 +72,8 @@ def upload_file():
             # Log the receipt
             print(f"[{time.strftime('%X')}] Received from {phone_number} ({strictness}). Saved: {filename}")
 
+            # Example: Queue a notification (integrate with your ad detection logic)
+            add_notification(phone_number, "Advertisement stopped, Bring Popcorn and Continue watching")
             return jsonify({'message': f'Image received with {strictness} strictness.'}), 200
 
         except Exception as e:
@@ -75,6 +81,23 @@ def upload_file():
             return jsonify({'error': 'Could not process image'}), 500
 
     return jsonify({'error': 'Unknown error occurred'}), 500
+
+
+@app.route('/get_notifications', methods=['GET'])
+def get_notifications():
+    """
+    Endpoint for clients to fetch their notifications. Clients should provide their phone number as a query parameter.
+    """
+    phone_number = request.args.get('phone_number', 'unknown')
+    # Return notifications for this user and clear them
+    user_notifications = [n for n in notifications if n['phone_number'] == phone_number]
+    notifications[:] = [n for n in notifications if n['phone_number'] != phone_number]  # Clear fetched ones
+    print(f"Fetching notifications for {phone_number}: {user_notifications}")
+    return jsonify({'notifications': user_notifications})
+
+
+def add_notification(phone_number, message):
+    notifications.append({'phone_number': phone_number, 'message': message})
 
 
 if __name__ == '__main__':

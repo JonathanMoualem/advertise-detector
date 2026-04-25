@@ -1,4 +1,3 @@
-
 """
 Manages network communication for sending captured frames to the server.
 """
@@ -6,6 +5,7 @@ Manages network communication for sending captured frames to the server.
 import requests
 import threading
 import cv2
+import urllib.parse
 
 # --- Constants ---
 SERVER_URL = "http://127.0.0.1:5000/upload"
@@ -39,3 +39,20 @@ class NetworkManager:
             # print(f"Server response: {response.status_code}")
         except requests.exceptions.RequestException as e:
             print(f"Error sending image: {e}")
+
+    def get_notifications(self, phone_number):
+        """
+        Polls the server for new notifications for the given phone number.
+        Returns a list of notification dicts.
+        """
+        print(f"Fetching notifications for {phone_number}")
+        try:
+            response = requests.get(f"{self.server_url.replace('/upload', '/get_notifications')}?phone_number={urllib.parse.quote(phone_number)}")
+            print(f"Response status: {response.status_code}")
+            if response.status_code == 200:
+                data = response.json()
+                print(f"Response JSON: {data}")
+                return data.get('notifications', [])
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching notifications: {e}")
+        return []

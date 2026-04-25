@@ -3,15 +3,19 @@ Main entry point for the TV Detector Client application.
 Orchestrates the interaction between the UI, camera, image processing, and network modules.
 """
 
-import tkinter as tk
-import cv2
 import json
 import os
-from main_ui import MainUI
+import time
+import tkinter as tk
+
+import cv2
+
+from Alerting.Alerts import USER_CONFIG_FILE
+from Alerting.PhoneConnectorUI import PhoneConnector
 from camera_manager import CameraManager
 from image_processor import ImageProcessor
+from main_ui import MainUI
 from network_manager import NetworkManager
-from Alerting.PhoneConnectorUI import PhoneConnector
 
 # --- Constants ---
 DISPLAY_WIDTH = 640
@@ -24,7 +28,9 @@ MODE_PARAMS = {
     "Balanced": (3, 10),
     "Aggressive": (10, 2)
 }
+
 DEFAULT_MODE = "Balanced"
+
 
 class AppController:
     """
@@ -33,6 +39,7 @@ class AppController:
     def __init__(self, master, phone_number):
         self.master = master
         self.phone_number = phone_number
+        print(self.phone_number)
         
         # --- Modules ---
         self.camera = CameraManager()
@@ -44,6 +51,7 @@ class AppController:
         self.frame_counter = 0
         self.is_capturing_phase = True
         self.frames_to_send, self.frames_to_wait = MODE_PARAMS[DEFAULT_MODE]
+        self.last_notification_check = 0
         PhoneConnector.set_dark_title_bar(self.master)
 
         # --- UI Initialization ---
@@ -81,6 +89,15 @@ class AppController:
                 self.ui.show_message("No Video Signal")
         else:
             self.ui.show_message(f"Camera {self.camera.video_source_index} Unavailable\nClick 'Switch Camera'")
+        
+        # Poll for notifications every 5 seconds
+        current_time = time.time()
+        if current_time - self.last_notification_check > 5:
+            notifications = self.network.get_notifications(self.phone_number)
+            print(notifications)
+            for notif in notifications:
+                self.ui.show_notification_popup(notif['message'])
+            self.last_notification_check = current_time
         
         self.master.after(REFRESH_DELAY_MS, self.update)
 
@@ -175,6 +192,25 @@ class AppController:
         """Placeholder for end pan event."""
         pass
 
+
+
+def get_phone_number():
+    """
+        Reads the user's phone number from the config file. If not found, returns unknown
+    """
+    phone_number = None
+
+    if os.path.exists(USER_CONFIG_FILE):
+        try:
+            with open(USER_CONFIG_FILE, "r") as f:
+                config_data = json.load(f)
+                phone_number = config_data.get("user_number")
+        except Exception as e:
+            print(f"Error reading config file: {e}")
+
+    return phone_number
+
+
 if __name__ == '__main__':
     # Step 1: Create and run the phone connector window.
     login_root = tk.Tk()
@@ -182,16 +218,7 @@ if __name__ == '__main__':
     login_root.mainloop()
     
     # Step 2: Read the phone number from the config file.
-    config_file = "Alerting/user_config.json"
-    phone_number = None
-    
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, "r") as f:
-                config_data = json.load(f)
-                phone_number = config_data.get("user_number")
-        except Exception as e:
-            print(f"Error reading config file: {e}")
+    phone_number = get_phone_number()
     
     # Step 3: Only if phone number was obtained, create and run the main app.
     if phone_number:
