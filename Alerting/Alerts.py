@@ -3,16 +3,9 @@ from enum import Enum
 
 # --- TWILIO CONFIGURATION ---
 # Replace these with your actual Twilio credentials
-TWILIO_ACCOUNT_SID = 'FILL'
-TWILIO_AUTH_TOKEN = 'FILL'
 TWILIO_NUMBER="+14155238886"
-PROJECT_NUMBER = f'whatsapp:{TWILIO_NUMBER}'  # This is usually the default Sandbox number
-SANDBOX_CODE="join cold-command"
+SANDBOX_CODE="join post-when"
 USER_CONFIG_FILE = "Alerting/user_config.json"
-
-
-
-USER_NUMBER = 'whatsapp:+972526031919'  # Your actual phone number with country code
 
 
 class WhatsAppAlert(Enum):

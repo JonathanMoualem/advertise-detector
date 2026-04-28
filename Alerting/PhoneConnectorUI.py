@@ -23,7 +23,7 @@ class PhoneConnector:
         self.root_title = self.root.title("Connect WhatsApp")
         self.root.geometry("400x550")
         self.root.configure(bg="#2b2b2b")
-        self.set_dark_title_bar(self.root)
+        # self.set_dark_title_bar(self.root)
 
         # Scene 1: Input Number
         self.input_frame = tk.Frame(self.root, bg="#2b2b2b")
