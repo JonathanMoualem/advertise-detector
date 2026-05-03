@@ -1,4 +1,6 @@
 /.venv
 /uploads
 /.idea
-/__pycache__
+/**/__pycache__
+.env
+Alerting/user_config.json
