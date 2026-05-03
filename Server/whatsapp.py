@@ -14,7 +14,6 @@ client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 def send_whatsapp_alert(message_body, phone_number):
     """Sends the WhatsApp message via Twilio."""
     try:
-        print(phone_number)
         message = client.messages.create(
             from_=PROJECT_NUMBER,
             body=message_body,

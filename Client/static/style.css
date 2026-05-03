@@ -1,0 +1,289 @@
+:root {
+  --bg: #1e1e1e;
+  --bg2: #2d2d2d;
+  --fg: #ffffff;
+  --muted: #b0b0b0;
+  /* Unified purple accent — selected / primary / emphasized controls */
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --canvas-bg: #1a1a1a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.panel {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.panel-monitor.panel {
+  max-width: 980px;
+}
+
+.card {
+  background: var(--bg2);
+  border-radius: 8px;
+  padding: 24px;
+  border: 1px solid #3a3a3a;
+}
+
+.card h1 {
+  margin-top: 0;
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.hint {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+label {
+  display: block;
+  margin-top: 16px;
+  font-weight: 600;
+}
+
+input[type="tel"] {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: none;
+  font-size: 1rem;
+}
+
+.wa-link {
+  display: inline-block;
+  margin-top: 16px;
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+.row {
+  margin-top: 20px;
+}
+
+.qr-block {
+  margin-top: 16px;
+  padding: 10px;
+  text-align: center;
+  background: #3c3c3c;
+  border-radius: 8px;
+  border: 1px solid #4a4a4a;
+}
+
+.sandbox-qrcode {
+  display: block;
+  margin: 0 auto;
+  vertical-align: top;
+  max-width: 160px;
+  height: auto;
+}
+
+.monospace {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--fg);
+  margin: 8px 0 4px;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.status {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.monitor-body {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+@media (max-width: 720px) {
+  .monitor-body {
+    flex-direction: column;
+  }
+
+  .settings-sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .settings-block {
+    flex: 1 1 auto;
+    min-width: min(280px, 100%);
+  }
+}
+
+.settings-sidebar {
+  flex: 0 0 auto;
+  min-width: 200px;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 16px;
+  background: var(--bg2);
+  border: 1px solid #444;
+  border-radius: 8px;
+}
+
+.settings-block .label {
+  display: block;
+  margin-bottom: 10px;
+  text-align: left;
+}
+
+.preview-column {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+}
+
+video#video {
+  display: none;
+}
+
+#view {
+  background: var(--canvas-bg);
+  border-radius: 4px;
+  cursor: grab;
+  max-width: 100%;
+}
+
+#view:active {
+  cursor: grabbing;
+}
+
+.capture-bar {
+  margin-top: 14px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.label {
+  font-weight: bold;
+  color: var(--muted);
+}
+
+.seg {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.seg-vertical {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.seg-vertical .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.btn {
+  border: none;
+  border-radius: 4px;
+  padding: 10px 16px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: #fff;
+}
+
+.btn.primary {
+  background: var(--accent);
+}
+
+.btn.primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid #555;
+}
+
+.btn.ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Selected segment / emphasized state — same purple as primary */
+.btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn.inactive {
+  background: #111;
+  color: var(--muted);
+}
+
+.btn.inactive:hover {
+  color: var(--fg);
+  background: #222;
+}
+
+/* Capturing on: same accent as highlight (was red before) */
+.btn.capturing-on {
+  background: var(--accent);
+  color: #fff;
+}
+
+#toast-host .toast {
+  position: relative;
+  background: var(--bg2);
+  border: 1px solid var(--accent);
+  color: var(--fg);
+  padding: 10px 14px;
+  margin: 10px auto;
+  max-width: 360px;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}

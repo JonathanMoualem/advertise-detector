@@ -1,0 +1,20 @@
+services:
+  detector:
+    build:
+      context: .
+      dockerfile: Server/Dockerfile
+    ports:
+      - "6000:6000"
+    environment:
+      - ADVERTISE_UPLOADS_DIR=/app/uploads
+
+  web:
+    build:
+      context: .
+      dockerfile: Client/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DETECTOR_URL: http://detector:6000
+    depends_on:
+      - detector

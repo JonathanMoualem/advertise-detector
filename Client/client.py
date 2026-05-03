@@ -39,8 +39,7 @@ class AppController:
     def __init__(self, master, phone_number):
         self.master = master
         self.phone_number = phone_number
-        print(self.phone_number)
-        
+
         # --- Modules ---
         self.camera = CameraManager()
         self.processor = ImageProcessor(display_size=(DISPLAY_WIDTH, DISPLAY_HEIGHT))
@@ -52,16 +51,13 @@ class AppController:
         self.is_capturing_phase = True
         self.frames_to_send, self.frames_to_wait = MODE_PARAMS[DEFAULT_MODE]
         self.last_notification_check = 0
-        # PhoneConnector.set_dark_title_bar(self.master)
 
         # --- UI Initialization ---
         self.ui = MainUI(self.master, self.get_callbacks())
         
         # --- Start ---
-        print("Attempting to open camera...")
         self.camera.open_camera()
-        print("Camera open attempt finished.")
-        
+
         self.ui.status_label.config(text=f"Logged in as: {self.phone_number} | Camera Active")
         self.master.after(REFRESH_DELAY_MS, self.update)
 
@@ -94,7 +90,6 @@ class AppController:
         current_time = time.time()
         if current_time - self.last_notification_check > 5:
             notifications = self.network.get_notifications(self.phone_number)
-            print(notifications)
             for notif in notifications:
                 self.ui.show_notification_popup(notif['message'])
             self.last_notification_check = current_time

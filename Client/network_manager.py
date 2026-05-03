@@ -2,20 +2,41 @@
 Manages network communication for sending captured frames to the server.
 """
 
-import requests
-import threading
-import cv2
+import os
 import urllib.parse
 
+import cv2
+import requests
+import threading
+
 # --- Constants ---
-SERVER_URL = "http://127.0.0.1:6000/upload"
+DEFAULT_DETECTOR_ORIGIN = "http://127.0.0.1:6000"
+
+
+def detector_origin():
+    """Base URL without trailing slash, e.g. http://detector:6000"""
+    url = os.environ.get("DETECTOR_URL", DEFAULT_DETECTOR_ORIGIN).strip().rstrip("/")
+    if url.endswith("/upload"):
+        url = url[: -len("/upload")].rstrip("/")
+    return url
+
+
+def detector_upload_url():
+    return f"{detector_origin()}/upload"
+
+
+def detector_notifications_url(phone_number: str):
+    q = urllib.parse.quote(phone_number, safe="")
+    return f"{detector_origin()}/get_notifications?phone_number={q}"
+
 
 class NetworkManager:
     """
     A class to handle sending image data to a server asynchronously.
     """
-    def __init__(self, server_url=SERVER_URL):
-        self.server_url = server_url
+
+    def __init__(self, server_url=None):
+        self.server_url = server_url or detector_upload_url()
 
     def send_frame_async(self, frame, data):
         """
@@ -34,9 +55,7 @@ class NetworkManager:
         """
         try:
             files = {'image': ('capture.jpg', img_encoded.tobytes(), 'image/jpeg')}
-            response = requests.post(self.server_url, files=files, data=data)
-            # Optional: Log server response for debugging, but can be noisy.
-            # print(f"Server response: {response.status_code}")
+            requests.post(self.server_url, files=files, data=data)
         except requests.exceptions.RequestException as e:
             print(f"Error sending image: {e}")
 
@@ -45,13 +64,10 @@ class NetworkManager:
         Polls the server for new notifications for the given phone number.
         Returns a list of notification dicts.
         """
-        print(f"Fetching notifications for {phone_number}")
         try:
-            response = requests.get(f"{self.server_url.replace('/upload', '/get_notifications')}?phone_number={urllib.parse.quote(phone_number)}")
-            print(f"Response status: {response.status_code}")
+            response = requests.get(detector_notifications_url(phone_number))
             if response.status_code == 200:
                 data = response.json()
-                print(f"Response JSON: {data}")
                 return data.get('notifications', [])
         except requests.exceptions.RequestException as e:
             print(f"Error fetching notifications: {e}")

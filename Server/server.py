@@ -12,7 +12,7 @@ from model import Model, ContentMonitor
 from whatsapp import send_whatsapp_alert
 
 # --- Constants ---
-UPLOADS_DIR = '../uploads'
+UPLOADS_DIR = os.environ.get('ADVERTISE_UPLOADS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads'))
 
 # Notification queue (list of dicts: {'message': str, 'phone_number': str})
 notifications = []
@@ -31,8 +31,7 @@ cm = ContentMonitor()
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """
-    Handles file upload requests. Expects an image file and metadata
-    (phone_number, strictness).
+    Handles file upload requests. Expects an image file and phone_number metadata.
     """
     # --- 1. Validate Request ---
     if 'image' not in request.files:
@@ -44,7 +43,6 @@ def upload_file():
 
     # --- 2. Get Metadata ---
     phone_number = request.form.get('phone_number', 'unknown')
-    strictness = request.form.get('strictness', 'balanced')
 
     # --- 3. Process and Save Image ---
     if file:
@@ -59,6 +57,8 @@ def upload_file():
             state_changed, is_content = cm.process_frame_output(class_name, certainty)
             if state_changed and is_content:
                 add_notification(phone_number, "🚨 Advertise finished! You can go back watching :)")
+
+            return "", 200
 
         except Exception as e:
             print(f"Error processing image: {e}")
@@ -81,6 +81,7 @@ def get_notifications():
 
 def add_notification(phone_number, message):
     notifications.append({'phone_number': phone_number, 'message': message})
+    print("Added alert")
     send_whatsapp_alert(message, phone_number)
 
 

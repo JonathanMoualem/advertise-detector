@@ -1,1 +1,1 @@
-docker build -t advertise-detector-server .
+docker compose build

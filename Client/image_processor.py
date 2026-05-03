@@ -10,6 +10,15 @@ MIN_ZOOM = 1.0
 MAX_ZOOM = 4.0
 BOX_SCALE = 0.6 # 60% of the display size
 
+# Crop must span at least this many pixels in each dimension before sending upstream.
+MIN_CAPTURE_SIDE_PX = 32
+
+
+def _snap_px(val):
+    """Match browser Math.round(...) for landmark coordinates."""
+    return int(round(val))
+
+
 class ImageProcessor:
     """
     A class to manage digital zoom, pan, and cropping logic for image frames.
@@ -45,10 +54,10 @@ class ImageProcessor:
         center_x = cam_width/2 + self.pan_x * pan_range_x
         center_y = cam_height/2 + self.pan_y * pan_range_y
         
-        x1 = int(center_x - crop_w/2)
-        y1 = int(center_y - crop_h/2)
-        x2 = int(x1 + crop_w)
-        y2 = int(y1 + crop_h)
+        x1 = _snap_px(center_x - crop_w / 2)
+        y1 = _snap_px(center_y - crop_h / 2)
+        x2 = _snap_px(x1 + crop_w)
+        y2 = _snap_px(y1 + crop_h)
 
         # Clamp coordinates to be within frame dimensions
         x1, y1 = max(0, x1), max(0, y1)
@@ -76,12 +85,22 @@ class ImageProcessor:
         scale_x = zoomed_width / self.display_width
         scale_y = zoomed_height / self.display_height
 
-        final_x1 = int(box_x1 * scale_x)
-        final_y1 = int(box_y1 * scale_y)
-        final_x2 = int(box_x2 * scale_x)
-        final_y2 = int(box_y2 * scale_y)
+        fx1 = _snap_px(box_x1 * scale_x)
+        fy1 = _snap_px(box_y1 * scale_y)
+        fx2 = _snap_px(box_x2 * scale_x)
+        fy2 = _snap_px(box_y2 * scale_y)
 
-        return zoomed_frame[final_y1:final_y2, final_x1:final_x2]
+        # Clamp entirely inside zoomed bounds; preserve at least 1px span for indexing.
+        fx1 = max(0, min(fx1, max(0, zoomed_width - 1)))
+        fy1 = max(0, min(fy1, max(0, zoomed_height - 1)))
+        fx2 = max(fx1 + 1, min(fx2, zoomed_width))
+        fy2 = max(fy1 + 1, min(fy2, zoomed_height))
+
+        roi = zoomed_frame[fy1:fy2, fx1:fx2]
+        h, w = roi.shape[:2]
+        if h < MIN_CAPTURE_SIDE_PX or w < MIN_CAPTURE_SIDE_PX:
+            return None
+        return roi
 
     @staticmethod
     def get_box_coords(width, height):

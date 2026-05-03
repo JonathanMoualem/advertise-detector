@@ -1,4 +1,3 @@
-import ctypes
 import json
 import tkinter as tk
 import urllib.parse
@@ -20,10 +19,9 @@ class PhoneConnector:
         self.root = root
         self.sandbox_code = sandbox_code
         self.twilio_num = twilio_num
-        self.root_title = self.root.title("Connect WhatsApp")
+        self.root.title("Connect WhatsApp")
         self.root.geometry("400x550")
         self.root.configure(bg="#2b2b2b")
-        # self.set_dark_title_bar(self.root)
 
         # Scene 1: Input Number
         self.input_frame = tk.Frame(self.root, bg="#2b2b2b")
@@ -109,29 +107,9 @@ class PhoneConnector:
         # Bind Enter key to finish setup
         self.root.bind("<Return>", lambda e: self.root.destroy())
 
-    @staticmethod
-    def set_dark_title_bar(window):
-        """
-        Sets the dark mode attribute for the window title bar.
-        """
-        window.update()
-        dwmwa_use_immersive_dark_mode = 20
-        set_window_attribute = ctypes.windll.dwmapi.DwmSetWindowAttribute
-        get_parent = ctypes.windll.user32.GetParent
-        hwnd = get_parent(window.winfo_id())
-        rendering_policy = ctypes.c_int(2)
-
-        set_window_attribute(hwnd, dwmwa_use_immersive_dark_mode, ctypes.byref(rendering_policy),
-                             ctypes.sizeof(rendering_policy))
-
 
 if __name__ == "__main__":
     root = tk.Tk()
     # Use your actual Twilio Sandbox code here
     app = PhoneConnector(root, sandbox_code=SANDBOX_CODE)
     root.mainloop()
-
-    # send_whatsapp_alert(WhatsAppAlert.STARTUP)
-    # print("Server is starting. Monitoring for events...")
-    # print("⚠️ Event detected! Triggering WhatsApp alert...")
-    # send_whatsapp_alert(WhatsAppAlert.ADV_FINISHED)

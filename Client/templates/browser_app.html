@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TV Detector Client</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+
+<body>
+  <div id="toast-host"></div>
+
+  <section id="panel-setup" class="panel">
+    <div class="card">
+      <h1>Connect WhatsApp</h1>
+      <p class="muted">Enter your number in international format. You must join the Twilio WhatsApp sandbox to receive alerts.</p>
+      <label for="phone-input">Phone number</label>
+      <input id="phone-input" type="tel" placeholder="+972501234567" autocomplete="tel" />
+
+      <div class="qr-block" aria-label="WhatsApp sandbox QR code">
+        <img
+          class="sandbox-qrcode"
+          src="{{ url_for('sandbox_qr') }}"
+          width="160"
+          height="160"
+          alt="QR code: open WhatsApp with the sandbox message pre-filled"
+        />
+      </div>
+
+      <p class="hint">Send the sandbox phrase to <strong id="twilio-display">{{ twilio_number_display }}</strong> after scanning or using the link below.</p>
+      <p class="hint monospace">“{{ sandbox_code }}”</p>
+
+      {% set wa_link = "https://wa.me/" ~ twilio_number_plain ~ "?text=" ~ (sandbox_code|urlencode) %}
+      <a id="wa-link" class="wa-link" href="{{ wa_link }}" target="_blank" rel="noopener">Open WhatsApp with message</a>
+
+      <div class="row">
+        <button type="button" id="btn-continue-setup" class="btn primary">Continue to camera</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="panel-monitor" class="panel panel-monitor hidden">
+    <header class="top-bar">
+      <span id="status-text" class="status">Initializing…</span>
+      <button type="button" id="btn-logout" class="btn ghost">Change number</button>
+    </header>
+
+    <div class="monitor-body">
+      <aside class="settings-sidebar" aria-label="Settings">
+        <div class="settings-block">
+          <span class="label">Performance</span>
+          <div id="perf-modes" class="seg seg-vertical"></div>
+        </div>
+        <div class="settings-block">
+          <span class="label">Strictness</span>
+          <div id="strict-modes" class="seg seg-vertical"></div>
+        </div>
+      </aside>
+      <div class="preview-column">
+        <div class="stage">
+          <video id="video" playsinline muted autoplay></video>
+          <canvas id="view" width="640" height="480"></canvas>
+        </div>
+        <div class="capture-bar">
+          <button type="button" id="btn-toggle" class="btn primary">▶ Start Capturing</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    window.__TV_DETECTOR_CFG__ = {
+      sandbox_code: {{ sandbox_code | tojson }},
+      twilio_plain: {{ twilio_number_plain | tojson }},
+      notificationPollMs: 5000,
+      tickMs: 15,
+    };
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+
+</html>

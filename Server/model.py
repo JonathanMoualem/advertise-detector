@@ -1,13 +1,22 @@
-import numpy as np
+from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from torchvision import models
 
 
-MODELS_PATH = './Server/model2.pth'
+def _pick_torch_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    backend = getattr(torch.backends, "mps", None)
+    if backend is not None and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+MODELS_PATH = str(Path(__file__).resolve().parent / "model2.pth")
 CLASSES_LIST = [
     "Soccer-Regular-Game", "Soccer-Recap", "Soccer-Highlight",
     "Studio", "Graphic", "Commercial",
@@ -20,7 +29,7 @@ class Model:
 
     def __init__(self):
 
-        self.device = torch.device('mps' if torch.mps.is_available() else 'cpu')
+        self.device = _pick_torch_device()
         print(self.device)
 
         self.model = models.efficientnet_b0(weights=None)
@@ -50,8 +59,9 @@ class Model:
         # Get the top prediction
         max_prob, class_idx = torch.max(probs, dim=1)
         certainty = max_prob.item()
+        idx = int(class_idx.item())
 
-        return CLASSES_LIST[class_idx], certainty
+        return CLASSES_LIST[idx], certainty
 
 
 class ContentMonitor:
@@ -67,14 +77,15 @@ class ContentMonitor:
 
     def process_frame_output(self, class_name, certainty):
         """
-        Feed this function one frame at a time.
-        It returns an alert string if a state change occurs, otherwise returns None.
+        Returns (state_changed, is_content): whether an alert-worthy transition fired,
+        and whether the monitored streak type is "content" (game) vs non-content.
+        Low-confidence frames do not advance streaks but always return (False, False).
         """
         is_content = "Basketball" in class_name or "Soccer" in class_name
 
         # 1. Ignore "noise" entirely (simulates the dataframe filtering)
         if certainty < self.confidence_threshold:
-            return None
+            return False, False
 
         # 2. Manage the streak
         if is_content == self.current_streak_type:
@@ -96,5 +107,4 @@ class ContentMonitor:
                 print(f"ALERT: Switched TO {state_name}")
                 return True, self.current_state
 
-        # Return None if no alert was triggered on this frame
         return False, False
