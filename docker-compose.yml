@@ -5,16 +5,22 @@ services:
       dockerfile: Server/Dockerfile
     ports:
       - "6000:6000"
+    env_file:
+      - .env
     environment:
       - ADVERTISE_UPLOADS_DIR=/app/uploads
+      - PYTHONUNBUFFERED=1
 
   web:
     build:
       context: .
       dockerfile: Client/Dockerfile
     ports:
-      - "8080:8080"
+      - "443:443"
     environment:
       DETECTOR_URL: http://detector:6000
+      PORT: 443
+    volumes:
+      - /etc/ssl/cs:/cert:ro
     depends_on:
       - detector

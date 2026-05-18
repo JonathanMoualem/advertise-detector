@@ -16,6 +16,6 @@ COPY Client /app/Client
 ENV PYTHONPATH=/app
 ENV FLASK_APP=Client.web_server
 
-EXPOSE 8080
+EXPOSE 443
 
 CMD ["python", "-m", "Client.web_server"]

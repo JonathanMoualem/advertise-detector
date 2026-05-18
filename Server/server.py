@@ -58,6 +58,7 @@ def upload_file():
             if state_changed and is_content:
                 add_notification(phone_number, "🚨 Advertise finished! You can go back watching :)")
 
+
             return "", 200
 
         except Exception as e:
