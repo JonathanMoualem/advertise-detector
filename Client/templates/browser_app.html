@@ -4,66 +4,132 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TV Detector Client</title>
+  <title>adetector — stop watching ads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap"
+    rel="stylesheet"
+  />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
 
 <body>
+  {% set wa_link = "https://wa.me/" ~ twilio_number_plain ~ "?text=" ~ (sandbox_code|urlencode) %}
+
   <div id="toast-host"></div>
 
+  <!-- =================== SCREEN 1: Connect =================== -->
   <section id="panel-setup" class="panel">
-    <div class="card">
-      <h1>Connect WhatsApp</h1>
-      <p class="muted">Enter your number in international format. You must join the Twilio WhatsApp sandbox to receive alerts.</p>
-      <label for="phone-input">Phone number</label>
-      <input id="phone-input" type="tel" placeholder="+972501234567" autocomplete="tel" />
+    <div class="connect">
+      <div class="connect-left">
+        <div>
+          <span class="kicker">Step 1 of 2 · Connect</span>
+          <h1>Connect WhatsApp to <em>get pinged</em> when your show is back.</h1>
+        </div>
+        <p class="sub">
+          Send a one-time join message to our WhatsApp sandbox. We'll text you on the same
+          thread the moment the ad break ends.
+        </p>
 
-      <div class="qr-block" aria-label="WhatsApp sandbox QR code">
-        <img
-          class="sandbox-qrcode"
-          src="{{ url_for('sandbox_qr') }}"
-          width="160"
-          height="160"
-          alt="QR code: open WhatsApp with the sandbox message pre-filled"
-        />
+        <div class="steplist">
+          <div class="step">
+            <div class="num">1</div>
+            <div>
+              Scan the QR with your phone (or tap to open WhatsApp).
+              <span class="meta">Opens chat with <b id="twilio-display">{{ twilio_number_display }}</b></span>
+            </div>
+          </div>
+          <div class="step">
+            <div class="num">2</div>
+            <div>
+              Send the message exactly as it appears.
+              <span class="meta">message: <b class="mono">{{ sandbox_code }}</b></span>
+            </div>
+          </div>
+          <div class="step">
+            <div class="num">3</div>
+            <div>
+              Enter your number and click <b>I've sent it</b>. We'll match your number and unlock the detector.
+            </div>
+          </div>
+        </div>
+
+        <div class="phone-row">
+          <label for="phone-input">Your phone number</label>
+          <input id="phone-input" type="tel" placeholder="+972501234567" autocomplete="tel" />
+        </div>
+
+        <div class="button-row">
+          <button type="button" id="btn-continue-setup" class="btn primary lg">I've sent it →</button>
+          <a id="wa-link" class="btn ghost lg" href="{{ wa_link }}" target="_blank" rel="noopener">Open WhatsApp</a>
+        </div>
       </div>
 
-      <p class="hint">Send the sandbox phrase to <strong id="twilio-display">{{ twilio_number_display }}</strong> after scanning or using the link below.</p>
-      <p class="hint monospace">“{{ sandbox_code }}”</p>
+      <div class="connect-right">
+        <span class="kicker">Scan with your phone</span>
+        <div class="qr-card">
+          <div class="qr" aria-label="WhatsApp sandbox QR code">
+            <img
+              class="sandbox-qrcode"
+              src="{{ url_for('sandbox_qr') }}"
+              width="240"
+              height="240"
+              alt="QR code: open WhatsApp with the sandbox message pre-filled"
+            />
+          </div>
+          <div class="qr-caption">wa.me · twilio sandbox</div>
+        </div>
 
-      {% set wa_link = "https://wa.me/" ~ twilio_number_plain ~ "?text=" ~ (sandbox_code|urlencode) %}
-      <a id="wa-link" class="wa-link" href="{{ wa_link }}" target="_blank" rel="noopener">Open WhatsApp with message</a>
+        <div class="divider-or">or copy the message</div>
 
-      <div class="row">
-        <button type="button" id="btn-continue-setup" class="btn primary">Continue to camera</button>
+        <div class="sandbox-line">
+          <span class="muted">send</span>
+          <span>"{{ sandbox_code }}"</span>
+          <span class="muted">to</span>
+          <span>{{ twilio_number_display }}</span>
+          <button type="button" class="copy" id="btn-copy-sandbox">Copy</button>
+        </div>
       </div>
     </div>
   </section>
 
+  <!-- =================== SCREEN 2: Detector =================== -->
   <section id="panel-monitor" class="panel panel-monitor hidden">
     <header class="top-bar">
-      <span id="status-text" class="status">Initializing…</span>
-      <button type="button" id="btn-logout" class="btn ghost">Change number</button>
+      <a class="brand" href="#" onclick="return false;">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>adetector</span>
+      </a>
+      <div class="top-bar-meta">
+        <span id="status-chip" class="chip good">Camera ready</span>
+        <span class="sep"></span>
+        <span id="status-text" class="mono" style="font-size: 13px;">Initializing…</span>
+        <button type="button" id="btn-logout" class="btn secondary sm">Change number</button>
+      </div>
     </header>
 
-    <div class="monitor-body">
-      <aside class="settings-sidebar" aria-label="Settings">
-        <div class="settings-block">
-          <span class="label">Performance</span>
-          <div id="perf-modes" class="seg seg-vertical"></div>
-        </div>
-        <div class="settings-block">
-          <span class="label">Strictness</span>
-          <div id="strict-modes" class="seg seg-vertical"></div>
-        </div>
-      </aside>
-      <div class="preview-column">
-        <div class="stage">
+    <div class="detector">
+      <div class="start-bar">
+        <button type="button" id="btn-toggle" class="btn primary lg">▶ Start Capturing</button>
+      </div>
+
+      <div class="stage">
+        <div class="viewfinder">
           <video id="video" playsinline muted autoplay></video>
           <canvas id="view" width="640" height="480"></canvas>
+          <div id="rec-indicator" class="rec hidden"><span class="rec-dot"></span>REC</div>
         </div>
-        <div class="capture-bar">
-          <button type="button" id="btn-toggle" class="btn primary">▶ Start Capturing</button>
+      </div>
+
+      <div class="controls-row">
+        <div class="control-group">
+          <h3 class="panel-title">Performance</h3>
+          <div id="perf-modes" class="seg"></div>
+        </div>
+        <div class="control-group">
+          <h3 class="panel-title">Strictness</h3>
+          <div id="strict-modes" class="seg"></div>
         </div>
       </div>
     </div>

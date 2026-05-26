@@ -1,13 +1,13 @@
 /* global window, document */
 
 const DISPLAY_W = 640;
-const DISPLAY_H = 480;
+let DISPLAY_H = 480; // updated dynamically once camera dimensions are known
 const BOX_SCALE = 0.6;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 const LS_PHONE = "tv_detector_phone";
 /** Matches `:root --accent` in style.css */
-const ACCENT_PURPLE = "#8b5cf6";
+const ACCENT = "#c2410c";
 
 const MODE_PARAMS = {
   Weak: [1, 30],
@@ -89,24 +89,81 @@ function getZoomCropPixels(camW, camH, Z, PX, PY) {
   return { x1, y1, x2, y2 };
 }
 
+function drawCornerBracket(ctx, x, y, len, dx, dy) {
+  ctx.beginPath();
+  ctx.moveTo(x + dx * len, y);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x, y + dy * len);
+  ctx.stroke();
+}
+
 function drawOverlay(ctx) {
   const [bx1, by1, bx2, by2] = getBoxCoords(DISPLAY_W, DISPLAY_H);
-  ctx.strokeStyle = ACCENT_PURPLE;
-  ctx.lineWidth = 3;
+
+  // dim outside the box
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.fillRect(0, 0, DISPLAY_W, by1);
+  ctx.fillRect(0, by2, DISPLAY_W, DISPLAY_H - by2);
+  ctx.fillRect(0, by1, bx1, by2 - by1);
+  ctx.fillRect(bx2, by1, DISPLAY_W - bx2, by2 - by1);
+  ctx.restore();
+
+  // alignment rectangle
+  ctx.strokeStyle = captureRunning ? ACCENT : "rgba(255,255,255,0.85)";
+  ctx.lineWidth = captureRunning ? 2 : 1.5;
   ctx.strokeRect(bx1, by1, bx2 - bx1, by2 - by1);
-  ctx.fillStyle = ACCENT_PURPLE;
-  ctx.font = "bold 13px Segoe UI, system-ui, sans-serif";
+
+  // corner brackets
+  ctx.strokeStyle = captureRunning ? ACCENT : "rgba(255,255,255,0.95)";
+  ctx.lineWidth = 2;
+  const cornerLen = 14;
+  drawCornerBracket(ctx, bx1, by1, cornerLen, 1, 1);
+  drawCornerBracket(ctx, bx2, by1, cornerLen, -1, 1);
+  drawCornerBracket(ctx, bx1, by2, cornerLen, 1, -1);
+  drawCornerBracket(ctx, bx2, by2, cornerLen, -1, -1);
+
+  // label pill above the box
+  const label = captureRunning ? "● DETECTING AD BREAKS" : "ALIGN TV HERE";
+  ctx.font = '500 11px "Geist Mono", ui-monospace, Menlo, monospace';
   ctx.textAlign = "center";
-  ctx.fillText("Align TV Here", DISPLAY_W / 2, by1 - 10);
+  const textMetrics = ctx.measureText(label);
+  const padX = 12;
+  const padY = 4;
+  const lh = 14;
+  const lw = textMetrics.width + padX * 2;
+  const lx = DISPLAY_W / 2 - lw / 2;
+  const ly = by1 - lh - 10;
+
+  ctx.fillStyle = captureRunning ? ACCENT : "rgba(0,0,0,0.55)";
+  // rounded rect
+  const r = lh / 2 + 2;
+  ctx.beginPath();
+  ctx.moveTo(lx + r, ly);
+  ctx.lineTo(lx + lw - r, ly);
+  ctx.quadraticCurveTo(lx + lw, ly, lx + lw, ly + r);
+  ctx.lineTo(lx + lw, ly + lh + padY * 2 - r);
+  ctx.quadraticCurveTo(lx + lw, ly + lh + padY * 2, lx + lw - r, ly + lh + padY * 2);
+  ctx.lineTo(lx + r, ly + lh + padY * 2);
+  ctx.quadraticCurveTo(lx, ly + lh + padY * 2, lx, ly + lh + padY * 2 - r);
+  ctx.lineTo(lx, ly + r);
+  ctx.quadraticCurveTo(lx, ly, lx + r, ly);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#fff";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, DISPLAY_W / 2, ly + lh / 2 + padY);
+  ctx.textBaseline = "alphabetic";
 }
 
 function drawFrameMessage(ctx, msg) {
-  ctx.fillStyle = "#1a1a1a";
+  ctx.fillStyle = "#1a1815";
   ctx.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
-  ctx.fillStyle = "#ff6b6b";
-  ctx.font = "bold 14px Segoe UI, system-ui, sans-serif";
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.font = '500 12px "Geist Mono", ui-monospace, Menlo, monospace';
   ctx.textAlign = "center";
-  ctx.fillText(msg, DISPLAY_W / 2, DISPLAY_H / 2);
+  ctx.fillText(msg.toUpperCase(), DISPLAY_W / 2, DISPLAY_H / 2);
 }
 
 function drawPreview() {
@@ -114,7 +171,8 @@ function drawPreview() {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
   if (!vw || !vh || video.readyState < 2) {
-    drawFrameMessage(vctx, "No Video Signal");
+    drawFrameMessage(vctx, "No video signal");
+    drawOverlay(vctx);
     return;
   }
   const crop = getZoomCropPixels(vw, vh, zoom, panX, panY);
@@ -124,7 +182,7 @@ function drawPreview() {
     drawFrameMessage(vctx, "Processing error");
     return;
   }
-  vctx.fillStyle = "#1a1a1a";
+  vctx.fillStyle = "#0e0d0b";
   vctx.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
   vctx.drawImage(
     /** @type {CanvasImageSource} */ (video),
@@ -148,9 +206,7 @@ function rebuildSegment(containerId, options, selected, handler) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.textContent = opt;
-    btn.className =
-      "btn " +
-      (opt === selected ? "active" : "inactive");
+    if (opt === selected) btn.classList.add("active");
     btn.addEventListener("click", () => handler(opt));
     el.appendChild(btn);
   }
@@ -187,18 +243,46 @@ function setStrictMode(level) {
   refreshStrictButtons();
 }
 
+function setStatusChip(running) {
+  const chip = document.getElementById("status-chip");
+  const rec = document.getElementById("rec-indicator");
+  if (chip) {
+    chip.classList.remove("good", "live");
+    chip.classList.add(running ? "live" : "good");
+    chip.textContent = running ? "Capturing" : "Camera ready";
+  }
+  if (rec) rec.classList.toggle("hidden", !running);
+}
+
 function toggleCapture(btn) {
   captureRunning = !captureRunning;
   frameCounter = 0;
   capturingPhase = true;
   if (!btn) btn = /** @type {HTMLButtonElement} */ (document.getElementById("btn-toggle"));
   if (captureRunning) {
-    btn.textContent = "⏸ Stop Capturing";
-    btn.classList.add("capturing-on");
+    btn.textContent = "■ Stop Capturing";
+    btn.classList.remove("primary");
+    btn.classList.add("secondary");
+    showToast({ good: true, title: "Capturing started.", sub: "I'll text you the moment the ads end." });
   } else {
     btn.textContent = "▶ Start Capturing";
-    btn.classList.remove("capturing-on");
+    btn.classList.remove("secondary");
+    btn.classList.add("primary");
+    showToast({ good: false, title: "Capturing stopped.", sub: "You can resume any time." });
   }
+  setStatusChip(captureRunning);
+}
+
+function syncCanvasToCamera() {
+  if (!video || !view) return;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return;
+  DISPLAY_H = Math.round(DISPLAY_W * vh / vw);
+  view.width = DISPLAY_W;
+  view.height = DISPLAY_H;
+  const stage = document.querySelector('.stage');
+  if (stage) stage.style.aspectRatio = `${vw} / ${vh}`;
 }
 
 async function startCamera() {
@@ -207,6 +291,8 @@ async function startCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({ video: true });
   video.srcObject = stream;
   await video.play().catch(() => {});
+  video.addEventListener('loadedmetadata', syncCanvasToCamera, { once: true });
+  if (video.videoWidth) syncCanvasToCamera();
 }
 
 function stopCameraTracks() {
@@ -266,19 +352,38 @@ function captureTickLogic() {
   }
 }
 
-function toast(msg) {
+function showToast({ good, title, sub }) {
   const host = document.getElementById("toast-host");
   if (!host) return;
   const wrap = document.createElement("div");
   wrap.className = "toast";
-  const bell = document.createElement("span");
-  bell.textContent = "\u2757 ";
-  const text = document.createElement("span");
-  text.textContent = msg;
-  wrap.appendChild(bell);
-  wrap.appendChild(text);
+
+  const icon = document.createElement("div");
+  icon.className = "toast-icon";
+  icon.style.background = good ? "var(--good)" : "var(--bg-sunken)";
+  icon.style.color = good ? "#fff" : "var(--ink)";
+  icon.textContent = good ? "✓" : "·";
+
+  const body = document.createElement("div");
+  const t = document.createElement("div");
+  t.style.fontWeight = "500";
+  t.style.fontSize = "14px";
+  t.textContent = title || "";
+  const s = document.createElement("div");
+  s.style.fontSize = "12px";
+  s.style.color = "var(--muted-2)";
+  s.textContent = sub || "";
+  body.appendChild(t);
+  if (sub) body.appendChild(s);
+
+  wrap.appendChild(icon);
+  wrap.appendChild(body);
   host.appendChild(wrap);
-  window.setTimeout(() => wrap.remove(), 3000);
+  window.setTimeout(() => wrap.remove(), 3400);
+}
+
+function toastFromServer(msg) {
+  showToast({ good: true, title: msg });
 }
 
 async function pollNotifications() {
@@ -293,7 +398,7 @@ async function pollNotifications() {
     );
     const rows = data.notifications || [];
     for (const n of rows) {
-      toast(n.message);
+      toastFromServer(n.message);
     }
   } catch (_) {
     /* offline */
@@ -383,24 +488,47 @@ function savePhoneContinue() {
   if (!input) return;
   const num = input.value.trim().replace(/\s+/g, "");
   if (!num.startsWith("+") || num.length < 10) {
-    alert("Enter a valid number starting with +");
+    input.focus();
+    input.style.borderColor = "var(--accent)";
+    showToast({ good: false, title: "Enter a valid number", sub: "Must start with + and country code." });
+    setTimeout(() => { input.style.borderColor = ""; }, 1600);
     return;
   }
   phone = num;
   localStorage.setItem(LS_PHONE, phone);
   showSetup(false);
-  setStatus(`Logged in as: ${phone} | Camera initializing…`);
+  setStatusChip(false);
+  setStatus(`${phone} · camera initializing…`);
 
   Promise.resolve()
     .then(() => startCamera())
-    .then(() => setStatus(`Logged in as: ${phone} | Camera active`))
+    .then(() => setStatus(`${phone} · camera active`))
     .catch((e) => {
       console.error(e);
-      setStatus(`Logged in as: ${phone} | Camera blocked or unavailable`);
+      setStatus(`${phone} · camera blocked`);
       drawPreview();
     });
 
   beginTimers();
+}
+
+function copySandbox() {
+  const code = (cfg && cfg.sandbox_code) || "";
+  if (!code) return;
+  const btn = document.getElementById("btn-copy-sandbox");
+  const restore = () => { if (btn) btn.textContent = "Copy"; };
+  const after = () => {
+    if (btn) btn.textContent = "Copied";
+    setTimeout(restore, 1600);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(after).catch(() => {
+      window.prompt("Copy this message:", code);
+    });
+  } else {
+    window.prompt("Copy this message:", code);
+    after();
+  }
 }
 
 function beginTimers() {
@@ -440,14 +568,15 @@ function bootstrapFromStorage() {
     document.getElementById("phone-input")
   );
   if (input) input.value = phone;
-  setStatus(`Logged in as: ${phone} | Starting camera…`);
+  setStatusChip(false);
+  setStatus(`${phone} · starting camera…`);
   Promise.resolve()
     .then(() => startCamera())
-    .then(() => setStatus(`Logged in as: ${phone} | Camera active`))
+    .then(() => setStatus(`${phone} · camera active`))
     .catch((e) => {
       console.error(e);
       showSetup(false);
-      setStatus("Camera unavailable — grant permission and reload.");
+      setStatus("camera unavailable — grant permission and reload");
     });
   beginTimers();
 }
@@ -468,8 +597,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("wa-link")
   );
   if (wa && cfg.twilio_plain && cfg.sandbox_code) {
-    const enc =
-      encodeURIComponent(cfg.sandbox_code);
+    const enc = encodeURIComponent(cfg.sandbox_code);
     wa.href =
       `https://wa.me/${cfg.twilio_plain.replace(/[^\d]/g, "")}?text=${enc}`;
   }
@@ -486,6 +614,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  document.getElementById("btn-copy-sandbox")?.addEventListener("click", copySandbox);
+
   document.getElementById("btn-toggle")?.addEventListener("click", (e) => {
     toggleCapture(/** @type {HTMLButtonElement} */ (e.currentTarget));
   });
@@ -495,6 +625,7 @@ document.addEventListener("DOMContentLoaded", () => {
     stopCameraTracks();
     localStorage.removeItem(LS_PHONE);
     phone = "";
+    captureRunning = false;
     showSetup(true);
     setStatus("");
   });

@@ -48,7 +48,7 @@ def render_sandbox_qr_png():
     qr = qrcode.QRCode(version=None, box_size=4, border=2)
     qr.add_data(whatsapp_sandbox_join_url())
     qr.make(fit=True)
-    img = qr.make_image(fill_color="white", back_color="#2b2b2b")
+    img = qr.make_image(fill_color="#0d0d0d", back_color="#ffffff")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")

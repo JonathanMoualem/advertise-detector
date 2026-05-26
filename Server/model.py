@@ -86,11 +86,11 @@ class VisualProcessor:
 
 
 class ContentMonitor:
-    def __init__(self, streak_threshold=7, confidence_threshold=0.5, color_histogram_threshold=0.4):
+    def __init__(self, streak_threshold=7, confidence_threshold=0.5, color_histogram_threshold=0.3):
         self.streak_threshold = streak_threshold
         self.confidence_threshold = confidence_threshold
         self.color_histogram_threshold = color_histogram_threshold
-        self.color_histogram_group = deque(maxlen=streak_threshold)
+        self.color_histogram_group = deque(maxlen=streak_threshold * 2)
 
         # Persistent State Variables - Initialized to non-content
         self.current_state = False
@@ -144,6 +144,8 @@ class ContentMonitor:
                 if group_cohesion >= self.color_histogram_threshold:
                     self.streak_counter = 0  # We assume we are still in an ad break so we reset the streak counter
                     return False, False
+                else:
+                    print(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! {group_cohesion} !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
             # Only trigger if the new streak actually changes our overall state
             if self.current_streak_type != self.current_state:
