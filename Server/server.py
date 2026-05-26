@@ -8,7 +8,7 @@ import os
 from PIL import Image
 from flask import Flask, request, jsonify
 
-from model import Model, ContentMonitor
+from model import VisualProcessor, ContentMonitor
 from whatsapp import send_whatsapp_alert
 
 # --- Constants ---
@@ -24,7 +24,7 @@ if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
 
 
-model = Model()
+model = VisualProcessor()
 cm = ContentMonitor()
 
 
