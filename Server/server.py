@@ -8,7 +8,7 @@ import os
 from PIL import Image
 from flask import Flask, request, jsonify
 
-from model import Model, ContentMonitor
+from model import VisualProcessor, ContentMonitor
 from whatsapp import send_whatsapp_alert
 
 # --- Constants ---
@@ -24,7 +24,7 @@ if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
 
 
-model = Model()
+model = VisualProcessor()
 cm = ContentMonitor()
 
 
@@ -52,9 +52,9 @@ def upload_file():
             image_stream = io.BytesIO(filestr)
 
             img = Image.open(image_stream).convert('RGB')
-            class_name, certainty = model.output(img)
+            class_name, certainty, color_fp = model.output(img)
 
-            state_changed, is_content = cm.process_frame_output(class_name, certainty)
+            state_changed, is_content = cm.process_frame_output(class_name, certainty, color_fp)
             if state_changed and is_content:
                 add_notification(phone_number, "🚨 Advertise finished! You can go back watching :)")
 
