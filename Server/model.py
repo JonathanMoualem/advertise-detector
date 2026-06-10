@@ -31,6 +31,11 @@ CLASSES_LIST = [
 CLASSES = {cls: torch.tensor([i]) for i, cls in enumerate(CLASSES_LIST)}
 
 
+def is_content(class_name):
+    """Game content (vs. ad / studio / graphic). Mirrors the original ContentMonitor rule."""
+    return ("Basketball" in class_name) or ("Soccer" in class_name)
+
+
 class VisualProcessor:
 
     def __init__(self):
@@ -72,6 +77,7 @@ class VisualProcessor:
         return hist
 
     def output(self, img):
+        color_fp = self.extract_color_fingerprint(img)
         img = self.preprocess(img)
         logits = self.model(img.unsqueeze(0))
         probs = F.softmax(logits, dim=1)
@@ -81,15 +87,28 @@ class VisualProcessor:
         certainty = max_prob.item()
         idx = int(class_idx.item())
 
-        return CLASSES_LIST[idx], certainty, self.extract_color_fingerprint(img)
+        return CLASSES_LIST[idx], certainty, color_fp
+
+    def classify(self, img):
+        """
+        Lightweight CNN classification for the CNN gate: returns (class_name, certainty).
+        Same forward pass as output() but skips the HSV color fingerprint, which the
+        CLIP-driven decision path no longer needs.
+        """
+        with torch.no_grad():
+            tensor = self.preprocess(img)
+            logits = self.model(tensor.unsqueeze(0))
+            probs = F.softmax(logits, dim=1)
+            max_prob, class_idx = torch.max(probs, dim=1)
+        return CLASSES_LIST[int(class_idx.item())], max_prob.item()
 
 
 class ContentMonitor:
-    def __init__(self, streak_threshold=7, confidence_threshold=0.5, color_histogram_threshold=0.4):
+    def __init__(self, streak_threshold=7, confidence_threshold=0.5, color_histogram_threshold=0.3):
         self.streak_threshold = streak_threshold
         self.confidence_threshold = confidence_threshold
         self.color_histogram_threshold = color_histogram_threshold
-        self.color_histogram_group = deque(maxlen=streak_threshold)
+        self.color_histogram_group = deque(maxlen=streak_threshold * 2)
 
         # Persistent State Variables - Initialized to non-content
         self.current_state = False
@@ -143,6 +162,8 @@ class ContentMonitor:
                 if group_cohesion >= self.color_histogram_threshold:
                     self.streak_counter = 0  # We assume we are still in an ad break so we reset the streak counter
                     return False, False
+                else:
+                    print(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! {group_cohesion} !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
             # Only trigger if the new streak actually changes our overall state
             if self.current_streak_type != self.current_state:

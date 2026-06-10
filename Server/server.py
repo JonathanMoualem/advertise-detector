@@ -5,10 +5,15 @@ Supports concurrent connections from multiple clients.
 import io
 import os
 
+# Render matplotlib headlessly — the CLIP detector saves diagnostic plots server-side.
+# Must be set before anything imports matplotlib.pyplot (ad_break_monitor -> clip detector).
+os.environ.setdefault("MPLBACKEND", "Agg")
+
 from PIL import Image
 from flask import Flask, request, jsonify
 
-from model import VisualProcessor, ContentMonitor
+from ad_break_monitor import AdBreakMonitor
+from config import load_config
 from whatsapp import send_whatsapp_alert
 
 # --- Constants ---
@@ -24,8 +29,8 @@ if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
 
 
-model = VisualProcessor()
-cm = ContentMonitor()
+config = load_config()
+monitor = AdBreakMonitor(config)
 
 
 @app.route('/upload', methods=['POST'])
@@ -52,10 +57,10 @@ def upload_file():
             image_stream = io.BytesIO(filestr)
 
             img = Image.open(image_stream).convert('RGB')
-            class_name, certainty = model.output(img)
 
-            state_changed, is_content = cm.process_frame_output(class_name, certainty)
-            if state_changed and is_content:
+            # CLIP is the primary decision maker (optionally gated by the CNN). State is
+            # tracked per phone number inside the monitor.
+            if monitor.process_frame(phone_number, img):
                 add_notification(phone_number, "🚨 Advertise finished! You can go back watching :)")
 
 
@@ -78,6 +83,17 @@ def get_notifications():
     notifications[:] = [n for n in notifications if n['phone_number'] != phone_number]  # Clear fetched ones
     print(f"Fetching notifications for {phone_number}: {user_notifications}")
     return jsonify({'notifications': user_notifications})
+
+
+@app.route('/end_session', methods=['POST'])
+def end_session():
+    """
+    Called when the client stops capturing. Saves the CLIP diagnostic plot (when debug is
+    enabled) and clears this phone's streaming state.
+    """
+    phone_number = request.form.get('phone_number', 'unknown')
+    saved = monitor.end_session(phone_number)
+    return jsonify({'ok': True, 'plot': os.path.basename(saved) if saved else None})
 
 
 def add_notification(phone_number, message):

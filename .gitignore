@@ -11,3 +11,4 @@ uploads
 .env
 **/user_config.json
 .cursor
+/debug-plots

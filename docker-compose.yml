@@ -10,6 +10,11 @@ services:
     environment:
       - ADVERTISE_UPLOADS_DIR=/app/uploads
       - PYTHONUNBUFFERED=1
+    volumes:
+      # Diagnostic CLIP plots (saved on "stop capturing") land here on the host.
+      - ./debug-plots:/app/debug-plots
+      # Mount config so edits take effect on `docker compose up` (restart) — no rebuild needed.
+      - ./Server/config.json:/app/config.json:ro
 
   web:
     build:

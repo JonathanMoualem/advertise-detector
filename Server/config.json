@@ -1,0 +1,33 @@
+{
+  "use_cnn_gate": false,
+
+  "clip": {
+    "model_id": "openai/clip-vit-base-patch32",
+    "past_window_size": 20,
+    "smooth_window": 20,
+    "min_ratio": 1.15,
+    "stats_window": 120,
+    "decision_smooth": 3,
+    "cooldown": 60
+  },
+
+  "gate": {
+    "ad_like_classes": ["Commercial"],
+    "confidence_threshold": 0.5,
+    "probe_after": 5,
+    "probe_before": 5,
+    "require_content_after": true,
+    "require_ad_before": false
+  },
+
+  "state": {
+    "idle_evict_minutes": 10
+  },
+
+  "debug": {
+    "enabled": true,
+    "log_every": 30,
+    "save_plot_on_stop": true,
+    "plot_dir": "debug-plots"
+  }
+}

@@ -48,7 +48,7 @@ def render_sandbox_qr_png():
     qr = qrcode.QRCode(version=None, box_size=4, border=2)
     qr.add_data(whatsapp_sandbox_join_url())
     qr.make(fit=True)
-    img = qr.make_image(fill_color="white", back_color="#2b2b2b")
+    img = qr.make_image(fill_color="#0d0d0d", back_color="#ffffff")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -118,6 +118,13 @@ def create_app():
         rows = network.get_notifications(phone)
         out = [{"message": n.get("message", "")} for n in rows]
         return jsonify({"notifications": out})
+
+    @app.route("/api/end_session", methods=["POST"])
+    def end_session():
+        phone = request.form.get("phone_number", "").strip()
+        if phone:
+            network.end_session(phone)
+        return jsonify({"ok": True})
 
     @app.route("/favicon.ico", methods=["GET"])
     def favicon_placeholder():

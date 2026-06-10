@@ -30,6 +30,10 @@ def detector_notifications_url(phone_number: str):
     return f"{detector_origin()}/get_notifications?phone_number={q}"
 
 
+def detector_end_session_url():
+    return f"{detector_origin()}/end_session"
+
+
 class NetworkManager:
     """
     A class to handle sending image data to a server asynchronously.
@@ -72,3 +76,17 @@ class NetworkManager:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching notifications: {e}")
         return []
+
+    def end_session(self, phone_number):
+        """
+        Tells the detector the capture session ended (so it can save its diagnostic plot
+        and reset that phone's streaming state).
+        """
+        try:
+            requests.post(
+                detector_end_session_url(),
+                data={"phone_number": phone_number},
+                timeout=5,
+            )
+        except requests.exceptions.RequestException as e:
+            print(f"Error ending session: {e}")
