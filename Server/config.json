@@ -20,6 +20,15 @@
     "require_ad_before": false
   },
 
+  "strictness": {
+    "default": "Balanced",
+    "ratios": {
+      "Weak": 1.1,
+      "Balanced": 1.2,
+      "Aggressive": 1.3
+    }
+  },
+
   "state": {
     "idle_evict_minutes": 10
   },

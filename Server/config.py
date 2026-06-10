@@ -39,6 +39,10 @@ _DEFAULTS = {
         "require_content_after": True,
         "require_ad_before": True,
     },
+    "strictness": {
+        "default": "Balanced",
+        "ratios": {"Weak": 1.1, "Balanced": 1.2, "Aggressive": 1.3},
+    },
     "state": {
         "idle_evict_minutes": 10,
     },
@@ -84,6 +88,26 @@ class GateConfig:
 
 
 @dataclass
+class StrictnessConfig:
+    """Maps the UI strictness level to the CLIP detector's min_ratio (the uprise trigger)."""
+    default: str = "Balanced"
+    ratios: dict = field(
+        default_factory=lambda: {"Weak": 1.1, "Balanced": 1.2, "Aggressive": 1.3}
+    )
+
+    def ratio_for(self, level, fallback):
+        """
+        min_ratio for a strictness level. Falls back to the configured default level, then
+        to `fallback` (clip.min_ratio) when the level and default are both unknown.
+        """
+        if level in self.ratios:
+            return self.ratios[level]
+        if self.default in self.ratios:
+            return self.ratios[self.default]
+        return fallback
+
+
+@dataclass
 class StateConfig:
     idle_evict_minutes: float = 10.0
 
@@ -101,6 +125,7 @@ class AppConfig:
     use_cnn_gate: bool = True
     clip: ClipConfig = field(default_factory=ClipConfig)
     gate: GateConfig = field(default_factory=GateConfig)
+    strictness: StrictnessConfig = field(default_factory=StrictnessConfig)
     state: StateConfig = field(default_factory=StateConfig)
     debug: DebugConfig = field(default_factory=DebugConfig)
 
@@ -134,6 +159,7 @@ def load_config(path=CONFIG_PATH):
         use_cnn_gate=bool(merged["use_cnn_gate"]),
         clip=ClipConfig(**merged["clip"]),
         gate=GateConfig(**merged["gate"]),
+        strictness=StrictnessConfig(**merged["strictness"]),
         state=StateConfig(**merged["state"]),
         debug=DebugConfig(**merged["debug"]),
     )

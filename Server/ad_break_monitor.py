@@ -62,16 +62,25 @@ class AdBreakMonitor:
 
     # ------------------------------------------------------------------ public
 
-    def process_frame(self, phone_number, img):
+    def process_frame(self, phone_number, img, strictness=None):
         """
         Ingest one frame (PIL RGB) for `phone_number`. Returns True iff this frame should
         fire a "show is back" alert.
+
+        `strictness` (e.g. "Weak"/"Balanced"/"Aggressive") sets the CLIP uprise trigger
+        (min_ratio) live, falling back to clip.min_ratio when unknown.
         """
         self._evict_idle()
         st = self._get_state(phone_number)
 
         with st.lock:
             st.last_seen = time.time()
+
+            # Strictness drives the trigger threshold, applied immediately (per frame) so a
+            # mid-session change takes effect without restarting capture.
+            st.detector.min_ratio = self.cfg.strictness.ratio_for(
+                strictness, self.cfg.clip.min_ratio
+            )
 
             # Gate ON: classify NOW (one inference) and cache, so the boundary branch is free.
             if self.use_gate:

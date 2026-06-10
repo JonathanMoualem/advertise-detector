@@ -9,11 +9,10 @@ const LS_PHONE = "tv_detector_phone";
 /** Matches `:root --accent` in style.css */
 const ACCENT = "#c2410c";
 
-const MODE_PARAMS = {
-  Weak: [1, 30],
-  Balanced: [3, 10],
-  Aggressive: [10, 2],
-};
+// Fixed capture cadence (the former "Weak" preset): send 1 frame, then wait 30 ticks.
+// At tickMs=15 that's ~one frame every 465 ms (~2.15 fps).
+const FRAMES_TO_SEND = 1;
+const FRAMES_TO_WAIT = 30;
 
 /** @typedef {{sandbox_code:string, twilio_plain:string, notificationPollMs:number, tickMs:number}} Cfg */
 
@@ -32,10 +31,9 @@ let panY = 0;
 /** @type {string} */
 let phone = "";
 
-let perfMode = "Balanced";
 let strictnessLevel = "Balanced";
-let framesToSend = MODE_PARAMS.Balanced[0];
-let framesToWait = MODE_PARAMS.Balanced[1];
+const framesToSend = FRAMES_TO_SEND;
+const framesToWait = FRAMES_TO_WAIT;
 
 let captureRunning = false;
 let capturingPhase = true;
@@ -212,15 +210,6 @@ function rebuildSegment(containerId, options, selected, handler) {
   }
 }
 
-function refreshPerfButtons() {
-  rebuildSegment(
-    "perf-modes",
-    ["Weak", "Balanced", "Aggressive"],
-    perfMode,
-    setPerfMode
-  );
-}
-
 function refreshStrictButtons() {
   rebuildSegment(
     "strict-modes",
@@ -228,14 +217,6 @@ function refreshStrictButtons() {
     strictnessLevel,
     setStrictMode
   );
-}
-
-function setPerfMode(mode) {
-  perfMode = mode;
-  [framesToSend, framesToWait] = MODE_PARAMS[mode];
-  frameCounter = 0;
-  capturingPhase = true;
-  refreshPerfButtons();
 }
 
 function setStrictMode(level) {
@@ -597,7 +578,6 @@ document.addEventListener("DOMContentLoaded", () => {
   off = document.createElement("canvas");
   offCtx = off.getContext("2d");
 
-  refreshPerfButtons();
   refreshStrictButtons();
   wireCanvasPanZoom();
 

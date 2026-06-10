@@ -48,6 +48,7 @@ def upload_file():
 
     # --- 2. Get Metadata ---
     phone_number = request.form.get('phone_number', 'unknown')
+    strictness = request.form.get('strictness')
 
     # --- 3. Process and Save Image ---
     if file:
@@ -59,8 +60,8 @@ def upload_file():
             img = Image.open(image_stream).convert('RGB')
 
             # CLIP is the primary decision maker (optionally gated by the CNN). State is
-            # tracked per phone number inside the monitor.
-            if monitor.process_frame(phone_number, img):
+            # tracked per phone number inside the monitor; strictness tunes the trigger.
+            if monitor.process_frame(phone_number, img, strictness):
                 add_notification(phone_number, "🚨 Advertise finished! You can go back watching :)")
 
 

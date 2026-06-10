@@ -467,10 +467,8 @@ video#video {
 }
 
 .controls-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 28px;
-  align-items: end;
+  display: flex;
+  justify-content: center;
   padding: 4px 4px 0;
 }
 .control-group {
@@ -478,6 +476,8 @@ video#video {
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  width: 100%;
+  max-width: 420px;
 }
 .panel-title {
   font-family: var(--mono);
@@ -486,6 +486,7 @@ video#video {
   text-transform: uppercase;
   color: var(--muted);
   margin: 0;
+  text-align: center;
 }
 
 /* horizontal segmented control */
@@ -566,6 +567,5 @@ video#video {
   .connect-left, .connect-right { padding: 32px; }
   .connect-left { border-right: 0; border-bottom: 1px solid var(--rule); }
   .connect-left h1 { font-size: 44px; }
-  .controls-row { grid-template-columns: 1fr; gap: 18px; }
   .stage { min-height: 50vh; }
 }
