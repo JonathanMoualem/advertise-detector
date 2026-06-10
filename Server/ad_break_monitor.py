@@ -5,10 +5,11 @@ CLIP scene/context detection is the PRIMARY decision maker: the streaming detect
 the moment a broadcast enters a stable / repetitive segment (an "uprise" in self-similarity
 to the recent past), which is a strong proxy for "the show is back" after an ad break.
 
-An OPTIONAL CNN gate (toggled via config `use_cnn_gate`) suppresses uprises that are not a
-genuine ad -> content transition (e.g. an uprise into a long, stable commercial). When the
-gate is ON the CNN runs once PER FRAME on arrival and its label is cached, so a boundary
-decision only reads pre-computed labels — there is no burst of CNN inference at decision time.
+An OPTIONAL CNN gate (toggled via config `use_cnn_gate`) suppresses an uprise when the frame
+we just landed on is a graphic or a commercial rather than real content (e.g. an uprise into
+a long, stable commercial). When the gate is ON the CNN runs once PER FRAME on arrival and its
+label is cached, so a boundary decision only reads pre-computed labels — there is no burst of
+CNN inference at decision time.
 
 State is kept PER PHONE NUMBER, because the temporal CLIP windows assume one continuous
 stream; mixing two viewers' frames into one detector would be wrong.
@@ -21,7 +22,7 @@ import time
 from collections import deque
 
 from clip_context_detector import StreamingContextDetector, setup_clip_model
-from model import VisualProcessor, _pick_torch_device, is_content
+from model import VisualProcessor, _pick_torch_device
 
 
 class _PhoneState:
@@ -55,7 +56,8 @@ class AdBreakMonitor:
         self.visual = None
         if self.use_gate:
             self.visual = visual or VisualProcessor()
-        self._ad_like = set(config.gate.ad_like_classes)
+        # Classes that should suppress an alert (we landed on an ad/graphic, not content).
+        self._blocked = set(config.gate.block_classes)
 
         self._phones = {}
         self._lock = threading.Lock()
@@ -107,44 +109,34 @@ class AdBreakMonitor:
 
     def _gate_pass(self, st, phone=None, result=None):
         """
-        ad -> content check using only the cached labels in the current window.
+        "Not a graphic/commercial" check on the frame we just landed on, using only the
+        cached labels in the current window.
 
-        The uprise marks the new, now-stable segment, so the most recent frames represent
-        the content we just entered, and the oldest frames in the window represent the
-        prior segment. Require (configurable):
-          * the new segment to look like content (game), and
-          * the prior segment to look like an ad.
+        The uprise marks the new, now-stable segment, so the most recent `probe_after`
+        frames are what the viewer is looking at now. Alert unless those frames are
+        (confidently, by majority) one of the blocked classes — i.e. suppress only when
+        the CNN is sure we landed on a graphic or a commercial rather than real content.
         """
         g = self.cfg.gate
         labels = list(st.labels)
+        recent = labels[-g.probe_after:] if g.probe_after > 0 else labels
 
-        after = labels[-g.probe_after:] if g.probe_after > 0 else []
-        before = labels[: g.probe_before] if g.probe_before > 0 else []
-
-        after_ok = self._majority(after, is_content)
-        before_ok = self._majority(before, lambda name: name in self._ad_like)
-
-        ok = True
-        if g.require_content_after:
-            ok = ok and after_ok
-        if g.require_ad_before:
-            ok = ok and before_ok
+        blocked = self._majority(recent, lambda name: name in self._blocked)
+        ok = not blocked
 
         if self.debug.enabled:
             t = getattr(result, "frame_index", "?")
             r = getattr(result, "ratio", float("nan"))
             self._log(f"[{phone}] BOUNDARY @t={t} ratio={r:.3f} | gate "
-                      f"content_after={after_ok} ad_before={before_ok} "
-                      f"-> {'ALERT' if ok else 'SUPPRESSED'}")
-            self._log(f"[{phone}]   before={before}")
-            self._log(f"[{phone}]   after ={after}")
+                      f"blocked={blocked} -> {'ALERT' if ok else 'SUPPRESSED'}")
+            self._log(f"[{phone}]   recent={recent}")
         return ok
 
     def _majority(self, labels, class_predicate):
         """
         True iff a strict majority of the *confident* frames in `labels` satisfy
-        `class_predicate(class_name)`. With no confident frames, returns False
-        (conservative — we do not alert on an unsure segment).
+        `class_predicate(class_name)`. With no confident frames, returns False — so an
+        unsure segment is treated as "not blocked" and the uprise is allowed through.
         """
         thr = self.cfg.gate.confidence_threshold
         confident = [(name, cert) for (name, cert) in labels if cert >= thr]

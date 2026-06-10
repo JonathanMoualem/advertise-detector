@@ -19,7 +19,8 @@ CONFIG_PATH = os.environ.get(
 )
 
 # Built-in defaults. These mirror StreamingContextDetector's constructor defaults and the
-# gate behaviour confirmed with the user (ad -> content). File values override these.
+# gate behaviour confirmed with the user (suppress uprises that land on a graphic/commercial).
+# File values override these.
 _DEFAULTS = {
     "use_cnn_gate": True,
     "clip": {
@@ -32,12 +33,9 @@ _DEFAULTS = {
         "cooldown": 60,
     },
     "gate": {
-        "ad_like_classes": ["Commercial"],
+        "block_classes": ["Graphic", "Commercial"],
         "confidence_threshold": 0.5,
         "probe_after": 5,
-        "probe_before": 5,
-        "require_content_after": True,
-        "require_ad_before": True,
     },
     "strictness": {
         "default": "Balanced",
@@ -79,12 +77,14 @@ class ClipConfig:
 
 @dataclass
 class GateConfig:
-    ad_like_classes: List[str] = field(default_factory=lambda: ["Commercial"])
+    """
+    CNN gate definition. An uprise is suppressed when the frames we just entered are
+    (confidently, by majority) one of `block_classes` — i.e. a graphic or a commercial.
+    `probe_after` is how many of the most recent frames define "what we're looking at now".
+    """
+    block_classes: List[str] = field(default_factory=lambda: ["Graphic", "Commercial"])
     confidence_threshold: float = 0.5
     probe_after: int = 5
-    probe_before: int = 5
-    require_content_after: bool = True
-    require_ad_before: bool = True
 
 
 @dataclass

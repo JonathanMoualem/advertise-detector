@@ -1,5 +1,5 @@
 {
-  "use_cnn_gate": false,
+  "use_cnn_gate": true,
 
   "clip": {
     "model_id": "openai/clip-vit-base-patch32",
@@ -12,12 +12,9 @@
   },
 
   "gate": {
-    "ad_like_classes": ["Commercial"],
+    "block_classes": ["Graphic"],
     "confidence_threshold": 0.5,
-    "probe_after": 5,
-    "probe_before": 5,
-    "require_content_after": true,
-    "require_ad_before": false
+    "probe_after": 5
   },
 
   "strictness": {
