@@ -2,10 +2,13 @@
 
 const DISPLAY_W = 640;
 let DISPLAY_H = 480; // updated dynamically once camera dimensions are known
-const BOX_SCALE = 0.6;
+const DEFAULT_BOX_SCALE = 0.6;
+const MIN_BOX_SCALE = 0.2;
+const MAX_BOX_SCALE = 0.95;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 const LS_PHONE = "tv_detector_phone";
+const LS_BOX = "tv_detector_box";
 /** Matches `:root --accent` in style.css */
 const ACCENT = "#c2410c";
 
@@ -27,6 +30,11 @@ const cfg =
 let zoom = MIN_ZOOM;
 let panX = 0;
 let panY = 0;
+
+// Alignment-box size as a fraction of the display, adjustable per axis so the
+// box can be reshaped to fit the TV (no longer locked to the camera ratio).
+let boxScaleX = DEFAULT_BOX_SCALE;
+let boxScaleY = DEFAULT_BOX_SCALE;
 
 /** @type {string} */
 let phone = "";
@@ -58,8 +66,8 @@ let pollTimerId = /** @type {ReturnType<typeof setInterval>|null} */ (null);
 let tickTimerId = /** @type {ReturnType<typeof setInterval>|null} */ (null);
 
 function getBoxCoords(w, h) {
-  const boxW = w * BOX_SCALE;
-  const boxH = h * BOX_SCALE;
+  const boxW = w * boxScaleX;
+  const boxH = h * boxScaleY;
   const cx = w / 2;
   const cy = h / 2;
   const x1 = Math.round(cx - boxW / 2);
@@ -316,6 +324,8 @@ function snapAndPost() {
       fd.append("zoom_level", String(zoom));
       fd.append("pan_x", String(panX));
       fd.append("pan_y", String(panY));
+      fd.append("box_scale_x", String(boxScaleX));
+      fd.append("box_scale_y", String(boxScaleY));
 
       fetch("/api/upload_frame", { method: "POST", body: fd }).catch((e) =>
         console.warn("Upload failed:", e)
@@ -455,6 +465,60 @@ function wireCanvasPanZoom() {
   );
 }
 
+function clampBoxScale(v) {
+  if (!Number.isFinite(v)) return DEFAULT_BOX_SCALE;
+  return Math.max(MIN_BOX_SCALE, Math.min(MAX_BOX_SCALE, v));
+}
+
+function loadBoxScale() {
+  try {
+    const raw = localStorage.getItem(LS_BOX);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (saved && typeof saved.x === "number") boxScaleX = clampBoxScale(saved.x);
+    if (saved && typeof saved.y === "number") boxScaleY = clampBoxScale(saved.y);
+  } catch (_) {
+    /* ignore malformed storage */
+  }
+}
+
+function saveBoxScale() {
+  try {
+    localStorage.setItem(LS_BOX, JSON.stringify({ x: boxScaleX, y: boxScaleY }));
+  } catch (_) {
+    /* ignore quota/unavailable */
+  }
+}
+
+function wireBoxSizeControls() {
+  const wEl = /** @type {HTMLInputElement|null} */ (document.getElementById("box-width"));
+  const hEl = /** @type {HTMLInputElement|null} */ (document.getElementById("box-height"));
+  const wOut = document.getElementById("box-width-val");
+  const hOut = document.getElementById("box-height-val");
+  const pct = (v) => `${Math.round(v * 100)}%`;
+
+  // Reflect current state into the inputs (e.g. values restored from storage).
+  if (wEl) wEl.value = String(boxScaleX);
+  if (hEl) hEl.value = String(boxScaleY);
+  if (wOut) wOut.textContent = pct(boxScaleX);
+  if (hOut) hOut.textContent = pct(boxScaleY);
+
+  if (wEl) {
+    wEl.addEventListener("input", () => {
+      boxScaleX = clampBoxScale(parseFloat(wEl.value));
+      if (wOut) wOut.textContent = pct(boxScaleX);
+      saveBoxScale();
+    });
+  }
+  if (hEl) {
+    hEl.addEventListener("input", () => {
+      boxScaleY = clampBoxScale(parseFloat(hEl.value));
+      if (hOut) hOut.textContent = pct(boxScaleY);
+      saveBoxScale();
+    });
+  }
+}
+
 function showSetup(show) {
   const ps = document.getElementById("panel-setup");
   const pm = document.getElementById("panel-monitor");
@@ -579,6 +643,8 @@ document.addEventListener("DOMContentLoaded", () => {
   offCtx = off.getContext("2d");
 
   refreshStrictButtons();
+  loadBoxScale();
+  wireBoxSizeControls();
   wireCanvasPanZoom();
 
   const wa = /** @type {HTMLAnchorElement|null} */ (

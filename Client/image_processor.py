@@ -8,7 +8,10 @@ import cv2
 # --- Constants ---
 MIN_ZOOM = 1.0
 MAX_ZOOM = 4.0
-BOX_SCALE = 0.6 # 60% of the display size
+BOX_SCALE = 0.6 # default box size (fraction of the display per axis)
+# The alignment box can be reshaped per-axis to match the TV; clamp to a sane range.
+MIN_BOX_SCALE = 0.2
+MAX_BOX_SCALE = 0.95
 
 # Crop must span at least this many pixels in each dimension before sending upstream.
 MIN_CAPTURE_SIDE_PX = 32
@@ -28,6 +31,10 @@ class ImageProcessor:
         self.zoom_level = MIN_ZOOM
         self.pan_x = 0.0  # Range -1.0 to 1.0
         self.pan_y = 0.0  # Range -1.0 to 1.0
+        # Alignment box size as a fraction of the display, independent per axis so a
+        # non-square TV can be framed. Defaults reproduce the old fixed 0.6 square.
+        self.box_scale_x = BOX_SCALE
+        self.box_scale_y = BOX_SCALE
 
     def reset_view(self):
         """Resets zoom and pan to their default states."""
@@ -102,16 +109,16 @@ class ImageProcessor:
             return None
         return roi
 
-    @staticmethod
-    def get_box_coords(width, height):
+    def get_box_coords(self, width, height):
         """
-        Calculates the coordinates for the white alignment box based on a fixed scale.
+        Calculates the coordinates for the centered alignment box using the
+        per-axis box scales (box_scale_x / box_scale_y).
         Args:
             width (int): The width of the area to draw the box in.
             height (int): The height of the area to draw the box in.
         Returns:
             tuple: A tuple (x1, y1, x2, y2) for the box.
         """
-        box_w, box_h = width * BOX_SCALE, height * BOX_SCALE
+        box_w, box_h = width * self.box_scale_x, height * self.box_scale_y
         center_x, center_y = width / 2, height / 2
         return int(center_x - box_w/2), int(center_y - box_h/2), int(center_x + box_w/2), int(center_y + box_h/2)

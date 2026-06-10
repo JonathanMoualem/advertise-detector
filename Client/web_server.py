@@ -11,12 +11,21 @@ import numpy as np
 import qrcode
 from flask import Flask, Response, jsonify, render_template, request
 
-from Client.image_processor import ImageProcessor
+from Client.image_processor import (
+    ImageProcessor,
+    BOX_SCALE,
+    MIN_BOX_SCALE,
+    MAX_BOX_SCALE,
+)
 from Client.network_manager import NetworkManager
 
 CLIENT_DIR = os.path.dirname(os.path.abspath(__file__))
 DISPLAY_WIDTH = 640
 DISPLAY_HEIGHT = 480
+
+
+def _clamp(value, lo, hi):
+    return max(lo, min(hi, value))
 
 
 def decode_upload_frame(blob):
@@ -97,10 +106,20 @@ def create_app():
         pan_x = float(request.form.get("pan_x", "0"))
         pan_y = float(request.form.get("pan_y", "0"))
 
+        # Per-axis alignment-box size chosen in the UI so a non-square TV fits.
+        box_scale_x = _clamp(
+            float(request.form.get("box_scale_x", BOX_SCALE)), MIN_BOX_SCALE, MAX_BOX_SCALE
+        )
+        box_scale_y = _clamp(
+            float(request.form.get("box_scale_y", BOX_SCALE)), MIN_BOX_SCALE, MAX_BOX_SCALE
+        )
+
         proc = ImageProcessor(display_size=(DISPLAY_WIDTH, DISPLAY_HEIGHT))
         proc.zoom_level = zoom_level
         proc.pan_x = pan_x
         proc.pan_y = pan_y
+        proc.box_scale_x = box_scale_x
+        proc.box_scale_y = box_scale_y
 
         region = proc.get_capture_region(frame)
         if region is None or region.size == 0:
