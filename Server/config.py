@@ -31,10 +31,10 @@ _DEFAULTS = {
     "clip": {
         "model_id": "openai/clip-vit-base-patch32",
         "past_window_size": 29,
-        "smooth_window": 21,
+        "visual_smooth_window": 21,
         "min_ratio": 1.28,
-        "stats_window": 120,
-        "decision_smooth": 3,
+        "reference_window": 120,
+        "trigger_denoise_window": 3,
         "cooldown": 60,
     },
     "gate": {
@@ -69,22 +69,48 @@ _DEFAULTS = {
 
 @dataclass
 class ClipConfig:
+    """
+    Parameters for the CLIP streaming context detector (StreamingContextDetector).
+
+    Each frame the detector scores the current frame's mean cosine similarity to the
+    trailing `past_window_size` frames, then fires an "uprise" when that score jumps to at
+    least `min_ratio` times its recent baseline. The three "window" knobs below each shape
+    that decision differently — two are decision-critical, one is purely cosmetic:
+
+      * reference_window        — the baseline the ratio is measured AGAINST. Decision-critical;
+                                  also sets warm-up (no alert until it is half-full).
+      * trigger_denoise_window  — smooths the score that goes INTO the ratio. Decision-critical;
+                                  suppresses single-frame false triggers.
+      * visual_smooth_window    — smooths a SEPARATE line for the diagnostic plots only. Has NO
+                                  effect on the decision; removable without changing detection.
+    """
     model_id: str = "openai/clip-vit-base-patch32"
+    # How many trailing frames the current frame is compared against to form the raw score.
     past_window_size: int = 29
-    smooth_window: int = 21
+    # PLOT-ONLY: trailing window for the smoothed similarity line on the diagnostic graphs.
+    # Never read by the boundary decision — purely cosmetic.
+    visual_smooth_window: int = 21
+    # Uprise trigger: fire when the de-noised score >= min_ratio * the reference-window median.
+    # Higher = stricter (fewer alerts), lower = more sensitive.
     min_ratio: float = 1.28
-    stats_window: int = 120
-    decision_smooth: int = 3
+    # Trailing window of raw scores whose median is the baseline the ratio divides by. Larger =
+    # a slower, more stable "normal"; smaller = tracks recent content. Also gates warm-up: no
+    # boundary can fire until this window is at least half-full (reference_window // 2 frames).
+    reference_window: int = 120
+    # Short trailing average of the score used as the ratio's numerator. 1 = use the raw current
+    # score (no de-noising); higher = more robust to a single noisy frame, but slightly laggier.
+    trigger_denoise_window: int = 3
+    # Minimum number of frames between two consecutive uprise flags.
     cooldown: int = 60
 
     def detector_kwargs(self):
         """Kwargs forwarded verbatim to StreamingContextDetector (model_id excluded)."""
         return {
             "past_window_size": self.past_window_size,
-            "smooth_window": self.smooth_window,
+            "visual_smooth_window": self.visual_smooth_window,
             "min_ratio": self.min_ratio,
-            "stats_window": self.stats_window,
-            "decision_smooth": self.decision_smooth,
+            "reference_window": self.reference_window,
+            "trigger_denoise_window": self.trigger_denoise_window,
             "cooldown": self.cooldown,
         }
 

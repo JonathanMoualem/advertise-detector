@@ -187,11 +187,11 @@ class AdBreakMonitor:
 
         if result.frame_index % n == 0:
             baseline_n = len(d._baseline)
-            ready = baseline_n >= d.stats_window // 2
+            ready = baseline_n >= d.reference_window // 2
             self._log(
                 f"[{phone}] t={result.frame_index} score={result.score:.4f} "
                 f"smoothed={result.smoothed_score:.4f} ratio={result.ratio:.3f} "
-                f"(trigger>={d.min_ratio}) baseline={baseline_n}/{d.stats_window} "
+                f"(trigger>={d.min_ratio}) baseline={baseline_n}/{d.reference_window} "
                 f"ready={ready} boundaries={len(d.boundaries)}"
             )
 

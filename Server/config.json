@@ -1,13 +1,13 @@
 {
-  "gate_type": "cnn",
+  "gate_type": "clip",
 
   "clip": {
     "model_id": "openai/clip-vit-base-patch32",
-    "past_window_size": 20,
-    "smooth_window": 20,
+    "past_window_size": 10,
+    "visual_smooth_window": 10,
     "min_ratio": 1.15,
-    "stats_window": 120,
-    "decision_smooth": 3,
+    "reference_window": 120,
+    "trigger_denoise_window": 3,
     "cooldown": 60
   },
 

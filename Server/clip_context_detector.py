@@ -103,21 +103,21 @@ class StreamingContextDetector:
         model,
         processor,
         device="cpu",
-        past_window_size=29,    # how many past frames the current frame is compared against
-        smooth_window=21,       # trailing window for the plotted smoothed line (visual only)
-        min_ratio=1.28,         # STRICT gate: flag when cur >= min_ratio * trailing-baseline median
-        stats_window=120,       # trailing window for the robust (median) baseline
-        decision_smooth=3,      # light causal de-noising of the score for the decision
-        cooldown=60,            # min frames between two transition flags
+        past_window_size=29,         # how many past frames the current frame is compared against
+        visual_smooth_window=21,     # PLOT-ONLY trailing window for the smoothed line (no decision effect)
+        min_ratio=1.28,              # STRICT gate: flag when cur >= min_ratio * reference-window median
+        reference_window=120,        # trailing window of raw scores -> median baseline (also gates warm-up)
+        trigger_denoise_window=3,    # short trailing avg of the score used in the decision (noise robustness)
+        cooldown=60,                 # min frames between two transition flags
     ):
         self.model = model
         self.processor = processor
         self.device = device
 
         self.past_window_size = past_window_size
-        self.smooth_window = smooth_window
+        self.visual_smooth_window = visual_smooth_window
         self.min_ratio = min_ratio
-        self.stats_window = stats_window
+        self.reference_window = reference_window
         self.cooldown = cooldown
 
         # No look-ahead: buffer holds the past window + the current frame.
@@ -127,9 +127,9 @@ class StreamingContextDetector:
         self.t = -1  # global index of the most recently received frame
 
         # Causal state.
-        self._plot_smooth = deque(maxlen=smooth_window)        # plotted smoothed line (visual only)
-        self._decision_smooth = deque(maxlen=decision_smooth)  # light de-noise for the decision
-        self._baseline = deque(maxlen=stats_window)            # trailing raw scores -> median baseline
+        self._plot_smooth = deque(maxlen=visual_smooth_window)       # plotted smoothed line (visual only)
+        self._trigger_denoise = deque(maxlen=trigger_denoise_window)  # light de-noise for the decision
+        self._baseline = deque(maxlen=reference_window)              # trailing raw scores -> median baseline
         self._last_boundary = -(10 ** 9)
 
         # History for the final graph.
@@ -164,8 +164,8 @@ class StreamingContextDetector:
         smoothed = sum(self._plot_smooth) / len(self._plot_smooth)
 
         # --- De-noised decision signal ---
-        self._decision_smooth.append(score)
-        cur = sum(self._decision_smooth) / len(self._decision_smooth)
+        self._trigger_denoise.append(score)
+        cur = sum(self._trigger_denoise) / len(self._trigger_denoise)
 
         # --- Strict RELATIVE decision (causal: uses only past scores) ---
         # Flag a MAJOR uprise when the de-noised similarity has jumped to at least
@@ -174,7 +174,7 @@ class StreamingContextDetector:
         # baseline similarity levels.
         is_boundary = False
         ratio = 1.0
-        if len(self._baseline) >= self.stats_window // 2:
+        if len(self._baseline) >= self.reference_window // 2:
             median = float(np.median(np.fromiter(self._baseline, dtype=float)))
             if median > 0:
                 ratio = cur / median
