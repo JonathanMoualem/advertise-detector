@@ -59,8 +59,8 @@ def upload_file():
 
             img = Image.open(image_stream).convert('RGB')
 
-            # CLIP is the primary decision maker (optionally gated by the CNN). State is
-            # tracked per phone number inside the monitor; strictness tunes the trigger.
+            # CLIP is the primary decision maker (optionally gated by the CNN or CLIP gate).
+            # State is tracked per phone number inside the monitor; strictness tunes the trigger.
             if monitor.process_frame(phone_number, img, strictness):
                 add_notification(phone_number, "🚨 Advertise finished! You can go back watching :)")
 

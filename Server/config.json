@@ -1,5 +1,5 @@
 {
-  "use_cnn_gate": true,
+  "gate_type": "cnn",
 
   "clip": {
     "model_id": "openai/clip-vit-base-patch32",
@@ -13,6 +13,16 @@
 
   "gate": {
     "block_classes": ["Graphic"],
+    "confidence_threshold": 0.5,
+    "probe_after": 5
+  },
+
+  "clip_gate": {
+    "labels": [
+      "A photo of a commercial on TV",
+      "A photo of a TV broadcast that is not a commercial"
+    ],
+    "block_labels": ["A photo of a commercial on TV"],
     "confidence_threshold": 0.5,
     "probe_after": 5
   },

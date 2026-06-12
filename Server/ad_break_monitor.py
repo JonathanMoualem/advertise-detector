@@ -5,11 +5,17 @@ CLIP scene/context detection is the PRIMARY decision maker: the streaming detect
 the moment a broadcast enters a stable / repetitive segment (an "uprise" in self-similarity
 to the recent past), which is a strong proxy for "the show is back" after an ad break.
 
-An OPTIONAL CNN gate (toggled via config `use_cnn_gate`) suppresses an uprise when the frame
-we just landed on is a graphic or a commercial rather than real content (e.g. an uprise into
-a long, stable commercial). When the gate is ON the CNN runs once PER FRAME on arrival and its
-label is cached, so a boundary decision only reads pre-computed labels — there is no burst of
-CNN inference at decision time.
+An OPTIONAL gate (selected via config `gate_type`: "none" / "cnn" / "clip") suppresses an
+uprise when the frame we just landed on is a graphic or a commercial rather than real content
+(e.g. an uprise into a long, stable commercial). The gate can be backed by either classifier:
+
+  * "cnn"  — the EfficientNet VisualProcessor (fixed sport/broadcast classes), or
+  * "clip" — zero-shot CLIP matching each frame to free-text descriptions (ClipGateClassifier).
+
+Both expose the same classify(img) -> (label, certainty) contract, so the suppression logic
+(_gate_pass / _majority) is identical regardless of which one is active. When a gate is ON the
+classifier runs once PER FRAME on arrival and its label is cached, so a boundary decision only
+reads pre-computed labels — there is no burst of inference at decision time.
 
 State is kept PER PHONE NUMBER, because the temporal CLIP windows assume one continuous
 stream; mixing two viewers' frames into one detector would be wrong.
@@ -22,6 +28,7 @@ import time
 from collections import deque
 
 from clip_context_detector import StreamingContextDetector, setup_clip_model
+from clip_gate import ClipGateClassifier
 from model import VisualProcessor, _pick_torch_device
 
 
@@ -41,10 +48,13 @@ class AdBreakMonitor:
     def __init__(self, config, clip_model=None, clip_processor=None, visual=None):
         self.cfg = config
         self.debug = config.debug
-        self.use_gate = config.use_cnn_gate
+        self.gate_type = config.gate_type          # "none" / "cnn" / "clip"
+        self.use_gate = self.gate_type != "none"
         self.device = _pick_torch_device()
 
-        # CLIP model + processor are shared across all phones (read-only at inference).
+        # CLIP model + processor are shared across all phones (read-only at inference) and,
+        # when the CLIP gate is active, shared with the gate classifier too — so enabling
+        # the CLIP gate loads no extra model.
         if clip_model is None or clip_processor is None:
             clip_model, clip_processor = setup_clip_model(
                 model_id=config.clip.model_id, device=self.device
@@ -52,12 +62,25 @@ class AdBreakMonitor:
         self.clip_model = clip_model
         self.clip_processor = clip_processor
 
-        # The CNN is only needed (and only loaded) when the gate is enabled.
-        self.visual = None
-        if self.use_gate:
-            self.visual = visual or VisualProcessor()
-        # Classes that should suppress an alert (we landed on an ad/graphic, not content).
-        self._blocked = set(config.gate.block_classes)
+        # Pick the active gate classifier + its config. _gate_pass / _majority only ever read
+        # self._gate_cfg (probe_after, confidence_threshold, blocked), so they are agnostic to
+        # which classifier produced the cached labels. The classifier (CNN or CLIP) is only
+        # constructed for the selected gate, so the other model is never loaded.
+        self._classifier = None
+        self._gate_cfg = None
+        self._blocked = set()
+        if self.gate_type == "cnn":
+            self._classifier = visual or VisualProcessor()
+            self._gate_cfg = config.gate
+        elif self.gate_type == "clip":
+            self._classifier = ClipGateClassifier(
+                self.clip_model, self.clip_processor,
+                labels=config.clip_gate.labels, device=self.device,
+            )
+            self._gate_cfg = config.clip_gate
+        if self._gate_cfg is not None:
+            # Labels that should suppress an alert (we landed on an ad/graphic, not content).
+            self._blocked = self._gate_cfg.blocked
 
         self._phones = {}
         self._lock = threading.Lock()
@@ -86,7 +109,7 @@ class AdBreakMonitor:
 
             # Gate ON: classify NOW (one inference) and cache, so the boundary branch is free.
             if self.use_gate:
-                class_name, certainty = self.visual.classify(img)
+                class_name, certainty = self._classifier.classify(img)
                 st.labels.append((class_name, certainty))
 
             result = st.detector.process_frame(img)
@@ -117,7 +140,7 @@ class AdBreakMonitor:
         (confidently, by majority) one of the blocked classes — i.e. suppress only when
         the CNN is sure we landed on a graphic or a commercial rather than real content.
         """
-        g = self.cfg.gate
+        g = self._gate_cfg
         labels = list(st.labels)
         recent = labels[-g.probe_after:] if g.probe_after > 0 else labels
 
@@ -138,7 +161,7 @@ class AdBreakMonitor:
         `class_predicate(class_name)`. With no confident frames, returns False — so an
         unsure segment is treated as "not blocked" and the uprise is allowed through.
         """
-        thr = self.cfg.gate.confidence_threshold
+        thr = self._gate_cfg.confidence_threshold
         confident = [(name, cert) for (name, cert) in labels if cert >= thr]
         if not confident:
             return False
