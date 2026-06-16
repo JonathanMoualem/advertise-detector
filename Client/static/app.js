@@ -65,6 +65,35 @@ let offCtx = null;
 let pollTimerId = /** @type {ReturnType<typeof setInterval>|null} */ (null);
 let tickTimerId = /** @type {ReturnType<typeof setInterval>|null} */ (null);
 
+/**
+ * Short chime played when the server tells us an ad break has ended.
+ * @type {HTMLAudioElement|null}
+ */
+let successSound = null;
+
+function initSuccessSound() {
+  try {
+    successSound = new Audio("/static/success.mp3");
+    successSound.preload = "auto";
+    successSound.volume = 0.7;
+  } catch (_) {
+    successSound = null;
+  }
+}
+
+function playSuccessSound() {
+  if (!successSound) return;
+  try {
+    // Reset so back-to-back alerts each retrigger the chime.
+    successSound.currentTime = 0;
+    const played = successSound.play();
+    // Browsers block autoplay until the user interacts; swallow that rejection.
+    if (played && typeof played.catch === "function") played.catch(() => {});
+  } catch (_) {
+    /* ignore playback errors */
+  }
+}
+
 function getBoxCoords(w, h) {
   const boxW = w * boxScaleX;
   const boxH = h * boxScaleY;
@@ -382,6 +411,7 @@ function showToast({ good, title, sub }) {
 }
 
 function toastFromServer(msg) {
+  playSuccessSound();
   showToast({ good: true, title: msg });
 }
 
@@ -646,6 +676,22 @@ document.addEventListener("DOMContentLoaded", () => {
   loadBoxScale();
   wireBoxSizeControls();
   wireCanvasPanZoom();
+
+  initSuccessSound();
+  // Autoplay policies require a prior user gesture; prime the audio element on
+  // the first interaction so the chime can fire when a server cue arrives.
+  const unlockAudio = () => {
+    if (!successSound) return;
+    successSound.play().then(
+      () => {
+        successSound.pause();
+        successSound.currentTime = 0;
+      },
+      () => {}
+    );
+  };
+  window.addEventListener("pointerdown", unlockAudio, { once: true });
+  window.addEventListener("keydown", unlockAudio, { once: true });
 
   const wa = /** @type {HTMLAnchorElement|null} */ (
     document.getElementById("wa-link")
