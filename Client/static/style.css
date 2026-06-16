@@ -206,17 +206,21 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .connect-left {
-  padding: 56px 64px;
+  padding: clamp(24px, 4.5vh, 56px) clamp(28px, 4vw, 64px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 28px;
+  /* `safe center` falls back to top-anchored when the stack is taller than the
+     viewport, so the buttons below the phone field never get clipped. */
+  justify-content: safe center;
+  gap: clamp(14px, 2.4vh, 28px);
   border-right: 1px solid var(--rule);
+  min-height: 0;
+  overflow-y: auto;
 }
 .connect-left h1 {
   font-family: var(--serif);
   font-weight: 400;
-  font-size: 64px;
+  font-size: clamp(38px, 5.2vh, 64px);
   line-height: 0.98;
   letter-spacing: -0.025em;
   margin: 0;
@@ -299,13 +303,15 @@ button { font-family: inherit; cursor: pointer; }
 
 /* connect right (QR side) */
 .connect-right {
-  padding: 56px 64px;
+  padding: clamp(24px, 4.5vh, 56px) clamp(28px, 4vw, 64px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 22px;
+  justify-content: safe center;
+  gap: clamp(14px, 2.2vh, 22px);
   background: var(--bg-sunken);
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .qr-card {
