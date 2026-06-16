@@ -233,7 +233,15 @@ function drawPreview() {
   drawOverlay(vctx);
 }
 
-function rebuildSegment(containerId, options, selected, handler) {
+/** Hover hints shown under each strictness option. */
+const STRICT_TOOLTIPS = {
+  Weak: "Might alert when there is a single long ad or ads that look like content.",
+  Balanced: "Recommended for most content types.",
+  Aggressive:
+    "Might miss alerts when the show you are watching has a large variety of frames.",
+};
+
+function rebuildSegment(containerId, options, selected, handler, tooltips) {
   const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = "";
@@ -242,6 +250,13 @@ function rebuildSegment(containerId, options, selected, handler) {
     btn.type = "button";
     btn.textContent = opt;
     if (opt === selected) btn.classList.add("active");
+    if (tooltips && tooltips[opt]) {
+      const tip = document.createElement("span");
+      tip.className = "tip-box";
+      tip.setAttribute("role", "tooltip");
+      tip.textContent = tooltips[opt];
+      btn.appendChild(tip);
+    }
     btn.addEventListener("click", () => handler(opt));
     el.appendChild(btn);
   }
@@ -252,7 +267,8 @@ function refreshStrictButtons() {
     "strict-modes",
     ["Weak", "Balanced", "Aggressive"],
     strictnessLevel,
-    setStrictMode
+    setStrictMode,
+    STRICT_TOOLTIPS
   );
 }
 

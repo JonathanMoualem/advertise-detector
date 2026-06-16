@@ -509,6 +509,7 @@ video#video {
   width: 100%;
 }
 .seg button {
+  position: relative;
   flex: 1;
   background: transparent;
   border: 0;
@@ -526,6 +527,74 @@ video#video {
   color: var(--bg);
 }
 .seg button:not(.active):hover { color: var(--ink); }
+
+/* ----- tooltips (strictness help + per-option hints) ----- */
+.help-tip {
+  position: relative;
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: help;
+  vertical-align: middle;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+.help-tip:hover,
+.help-tip:focus-visible { opacity: 1; outline: none; }
+.help-tip .help-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  /* nudge up so the icon's center lines up with the title's optical center */
+  position: relative;
+  top: -2px;
+}
+
+/* the white-on-black bubble, shared by the help icon and the option buttons */
+.tip-box {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 230px;
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 40;
+}
+/* little pointer at the bottom of the bubble */
+.tip-box::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--ink);
+}
+.help-tip:hover .tip-box,
+.help-tip:focus-visible .tip-box,
+.seg button:hover .tip-box,
+.seg button:focus-visible .tip-box {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
 
 /* TV box size sliders */
 .box-sliders {
