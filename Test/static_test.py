@@ -7,13 +7,16 @@ Feeds a directory of images through the EXACT server decision path
 reports:
 
   1. the frames where an uprise (context break) was detected,
-  2. whether each uprise was ACCEPTED or BLOCKED by the active gate, and
-  3. a CLIP-similarity plot: green line = uprise accepted, red line = uprise blocked
-     by the gate.
+  2. whether each uprise was ACCEPTED or BLOCKED by the active gate, and WHY it was
+     blocked — the destination is an ad, or the previous segment was already content
+     (the prev_window suppression), and
+  3. a CLIP-similarity plot: green line = uprise accepted, red = blocked (destination is
+     an ad), orange = blocked (previous segment was content).
 
-The gate (none / cnn / clip) and every threshold come straight from Server/config.json,
-so this exercises whatever the server is currently configured to do. Strictness defaults
-to the configured level (exactly as the server treats a request with no strictness).
+The gate (none / clip) and every threshold — including the previous-window knobs
+(prev_window / prev_gap) — come straight from Server/config.json, so this exercises
+whatever the server is currently configured to do. Strictness defaults to the configured
+level (exactly as the server treats a request with no strictness).
 
 Usage:
     python3 static_test.py /path/to/frames
@@ -38,6 +41,29 @@ from ad_break_monitor import AdBreakMonitor  # noqa: E402
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 PHONE = "static-test"  # single synthetic stream id
 
+# Gate verdict codes -> human-readable text for the report.
+REASONS = {
+    "accepted": "ACCEPTED",
+    "dest_ad": "BLOCKED — destination is an ad",
+    "prev_content": "BLOCKED — previous segment was content",
+    "blocked": "BLOCKED by gate",
+}
+
+
+def gate_reason(accepted, last_gate):
+    """
+    Classify the gate's verdict on the latest boundary, using the attribution the monitor
+    recorded on its per-phone state (AdBreakMonitor stashes `_PhoneState.last_gate`). No
+    gate logic is re-derived here, so the report can never drift from the real decision.
+    """
+    if accepted:
+        return "accepted"
+    if last_gate and last_gate.get("blocked"):
+        return "dest_ad"
+    if last_gate and last_gate.get("prev_was_content"):
+        return "prev_content"
+    return "blocked"
+
 
 def iter_frames(directory, stride=1):
     """
@@ -58,16 +84,18 @@ def iter_frames(directory, stride=1):
 def run(directory, strictness, stride):
     """
     Drive AdBreakMonitor over the folder; return (cfg, detector, uprises) where
-    `uprises` is a list of (frame_name, frame_index, accepted_by_gate).
+    `uprises` is a list of (frame_name, frame_index, accepted_by_gate, reason_code).
 
     An uprise is detected when the detector appends a new boundary on a frame. The
-    monitor's own return value tells us whether that uprise survived the gate: True =
-    accepted (alert), False on a boundary frame = blocked by the gate.
+    monitor's own return value tells us whether that uprise survived the gate (True =
+    accepted, False = blocked); `reason_code` (see REASONS) is read from the monitor's
+    per-phone attribution so a block is labelled destination-ad vs. previous-content.
     """
     cfg = load_config()
     cfg.debug.enabled = False  # silence the monitor's periodic logging; this script is the report
     monitor = AdBreakMonitor(cfg)
-    detector = monitor._get_state(PHONE).detector  # the per-stream CLIP detector
+    st = monitor._get_state(PHONE)   # per-stream state: detector + last gate attribution
+    detector = st.detector
 
     names, uprises, seen = [], [], 0
     for name, img in iter_frames(directory, stride):
@@ -75,30 +103,36 @@ def run(directory, strictness, stride):
         accepted = monitor.process_frame(PHONE, img, strictness)
         if len(detector.boundaries) > seen:  # a new uprise was flagged on this frame
             idx = detector.boundaries[-1]
-            uprises.append((names[idx], idx, accepted))
+            uprises.append((names[idx], idx, accepted, gate_reason(accepted, st.last_gate)))
             seen = len(detector.boundaries)
     return cfg, detector, uprises
 
 
 def make_plot(detector, uprises, path):
-    """CLIP similarity plot — green line = uprise accepted, red line = blocked by gate."""
+    """
+    CLIP similarity plot — green = accepted, red = blocked (destination is an ad),
+    orange = blocked (previous segment was content), gray = blocked (other).
+    """
     if not detector.history_frames:
         print("No frames were scored (folder smaller than the warm-up window) — no plot.")
         return None
-    accepted = [idx for _, idx, ok in uprises if ok]
-    blocked = [idx for _, idx, ok in uprises if not ok]
+    groups = [
+        ("accepted",     "green",  "Uprise accepted"),
+        ("dest_ad",      "red",    "Blocked — destination is an ad"),
+        ("prev_content", "orange", "Blocked — previous segment was content"),
+        ("blocked",      "gray",   "Blocked by gate"),
+    ]
 
     fig = plt.figure(figsize=(15, 5))
     plt.plot(detector.history_frames, detector.history_raw,
              label="Raw similarity", color="lightblue", alpha=0.6)
     plt.plot(detector.history_frames, detector.history_smoothed,
              label="Smoothed (causal)", color="mediumblue", linewidth=2)
-    for j, b in enumerate(accepted):
-        plt.axvline(b, color="green", linestyle="--", alpha=0.8,
-                    label="Uprise accepted" if j == 0 else None)
-    for j, b in enumerate(blocked):
-        plt.axvline(b, color="red", linestyle="--", alpha=0.8,
-                    label="Uprise blocked by gate" if j == 0 else None)
+    for code, color, label in groups:
+        marks = [idx for _, idx, _, why in uprises if why == code]
+        for j, b in enumerate(marks):
+            plt.axvline(b, color=color, linestyle="--", alpha=0.8,
+                        label=label if j == 0 else None)
     plt.title("Static test — CLIP similarity & uprise decisions")
     plt.xlabel("Frame Index")
     plt.ylabel("Cosine Similarity")
@@ -119,14 +153,15 @@ def report(cfg, detector, uprises, out_path):
         print("\nNo uprises detected.")
     else:
         print(f"\n{len(uprises)} uprise(s):")
-        w = max(len(n) for n, _, _ in uprises)
-        for name, idx, accepted in uprises:
-            verdict = ("ACCEPTED" if accepted else "BLOCKED by gate") if gate_on \
-                else "ACCEPTED (no gate)"
+        w = max(len(n) for n, _, _, _ in uprises)
+        for name, idx, accepted, code in uprises:
+            verdict = REASONS[code] if gate_on else "ACCEPTED (no gate)"
             print(f"  {name.ljust(w)}  t={idx:<5}  {verdict}")
         if gate_on:
-            acc = sum(1 for _, _, ok in uprises if ok)
-            print(f"\n  {acc} accepted, {len(uprises) - acc} blocked by gate")
+            acc = sum(1 for _, _, ok, _ in uprises if ok)
+            prev = sum(1 for _, _, _, c in uprises if c == "prev_content")
+            print(f"\n  {acc} accepted, {len(uprises) - acc} blocked by gate "
+                  f"({prev} by the previous-window check)")
 
     saved = make_plot(detector, uprises, out_path)
     if saved:

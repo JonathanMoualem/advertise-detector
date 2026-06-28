@@ -5,17 +5,18 @@ CLIP scene/context detection is the PRIMARY decision maker: the streaming detect
 the moment a broadcast enters a stable / repetitive segment (an "uprise" in self-similarity
 to the recent past), which is a strong proxy for "the show is back" after an ad break.
 
-An OPTIONAL gate (selected via config `gate_type`: "none" / "cnn" / "clip") suppresses an
-uprise when the frame we just landed on is a graphic or a commercial rather than real content
-(e.g. an uprise into a long, stable commercial). The gate can be backed by either classifier:
+An OPTIONAL CLIP gate (config `gate_type`: "none" / "clip") suppresses an uprise in two
+complementary cases, so an alert only fires on a genuine ad -> content return:
 
-  * "cnn"  — the EfficientNet VisualProcessor (fixed sport/broadcast classes), or
-  * "clip" — zero-shot CLIP matching each frame to free-text descriptions (ClipGateClassifier).
+  * DESTINATION — the frames we just landed on are a commercial rather than real content
+    (e.g. an uprise into a long, stable commercial), or
+  * PREVIOUS    — the segment just before the uprise was already content, so the uprise is a
+    within-content change (two different-looking parts of the same show), not a return.
 
-Both expose the same classify(img) -> (label, certainty) contract, so the suppression logic
-(_gate_pass / _majority) is identical regardless of which one is active. When a gate is ON the
-classifier runs once PER FRAME on arrival and its label is cached, so a boundary decision only
-reads pre-computed labels — there is no burst of inference at decision time.
+The gate is backed by ClipGateClassifier: zero-shot CLIP matching each frame to free-text
+descriptions, exposing classify(img) -> (label, certainty). When the gate is ON the classifier
+runs once PER FRAME on arrival and its label is cached, so a boundary decision only reads
+pre-computed labels — there is no burst of inference at decision time.
 
 State is kept PER PHONE NUMBER, because the temporal CLIP windows assume one continuous
 stream; mixing two viewers' frames into one detector would be wrong.
@@ -27,28 +28,36 @@ import threading
 import time
 from collections import deque
 
-from clip_context_detector import StreamingContextDetector, setup_clip_model
+from clip_context_detector import (
+    StreamingContextDetector,
+    setup_clip_model,
+    _pick_torch_device,
+)
 from clip_gate import ClipGateClassifier
-from model import VisualProcessor, _pick_torch_device
 
 
 class _PhoneState:
-    """Per-stream detector + (when gating) a CNN-label buffer aligned to its window."""
+    """Per-stream detector + (when gating) a rolling buffer of per-frame CLIP labels."""
 
     def __init__(self, detector, label_maxlen):
         self.detector = detector
         # (class_name, certainty) per frame, newest on the right; aligned 1:1 with the
         # detector's rolling embedding buffer so window slices line up.
         self.labels = deque(maxlen=label_maxlen) if label_maxlen else None
+        # Why the gate accepted/suppressed the MOST RECENT boundary, as
+        # {"blocked": bool, "prev_was_content": bool}. Lets offline tools (static_test)
+        # attribute a decision without re-deriving the gate logic. None until the first
+        # boundary is gated.
+        self.last_gate = None
         self.last_seen = time.time()
         self.lock = threading.Lock()
 
 
 class AdBreakMonitor:
-    def __init__(self, config, clip_model=None, clip_processor=None, visual=None):
+    def __init__(self, config, clip_model=None, clip_processor=None):
         self.cfg = config
         self.debug = config.debug
-        self.gate_type = config.gate_type          # "none" / "cnn" / "clip"
+        self.gate_type = config.gate_type          # "none" / "clip"
         self.use_gate = self.gate_type != "none"
         self.device = _pick_torch_device()
 
@@ -62,24 +71,19 @@ class AdBreakMonitor:
         self.clip_model = clip_model
         self.clip_processor = clip_processor
 
-        # Pick the active gate classifier + its config. _gate_pass / _majority only ever read
-        # self._gate_cfg (probe_after, confidence_threshold, blocked), so they are agnostic to
-        # which classifier produced the cached labels. The classifier (CNN or CLIP) is only
-        # constructed for the selected gate, so the other model is never loaded.
+        # Build the CLIP gate classifier + its config when gating is on. _gate_pass / _majority
+        # only ever read self._gate_cfg (probe_after, confidence_threshold, prev_window,
+        # prev_gap, blocked), reusing the CLIP model already loaded above — no extra model.
         self._classifier = None
         self._gate_cfg = None
         self._blocked = set()
-        if self.gate_type == "cnn":
-            self._classifier = visual or VisualProcessor()
-            self._gate_cfg = config.gate
-        elif self.gate_type == "clip":
+        if self.gate_type == "clip":
             self._classifier = ClipGateClassifier(
                 self.clip_model, self.clip_processor,
                 labels=config.clip_gate.labels, device=self.device,
             )
             self._gate_cfg = config.clip_gate
-        if self._gate_cfg is not None:
-            # Labels that should suppress an alert (we landed on an ad/graphic, not content).
+            # Labels that should suppress an alert (we landed on an ad, not content).
             self._blocked = self._gate_cfg.blocked
 
         self._phones = {}
@@ -132,13 +136,18 @@ class AdBreakMonitor:
 
     def _gate_pass(self, st, phone=None, result=None):
         """
-        "Not a graphic/commercial" check on the frame we just landed on, using only the
-        cached labels in the current window.
+        Two-sided "is this a real ad -> content return?" check, using only the cached labels.
 
-        The uprise marks the new, now-stable segment, so the most recent `probe_after`
-        frames are what the viewer is looking at now. Alert unless those frames are
-        (confidently, by majority) one of the blocked classes — i.e. suppress only when
-        the CNN is sure we landed on a graphic or a commercial rather than real content.
+        DESTINATION: the uprise marks the new, now-stable segment, so the most recent
+        `probe_after` frames are what the viewer is looking at now. Suppress when those are
+        (confidently, by majority) a blocked label — i.e. we rose into an ad, not content.
+
+        PREVIOUS (when `prev_window > 0`): the `prev_window` frames just before the uprise
+        (skipping `prev_gap` frames at the cut). Suppress when that window was confidently
+        content (NOT a blocked label), because a real "break finished" alert must come OUT of
+        an ad — a content -> content uprise is just a scene change inside the show. Reusing
+        _majority with the inverse predicate fails open automatically: with no confident
+        frames it returns False, so an uncertain previous window still alerts.
         """
         g = self._gate_cfg
         labels = list(st.labels)
@@ -147,12 +156,27 @@ class AdBreakMonitor:
         blocked = self._majority(recent, lambda name: name in self._blocked)
         ok = not blocked
 
+        prev_was_content = False
+        previous = []
+        if ok and g.prev_window > 0:
+            end = len(labels) - (g.probe_after + g.prev_gap)  # exclusive upper bound
+            previous = labels[max(0, end - g.prev_window):end] if end > 0 else []
+            prev_was_content = self._majority(previous, lambda name: name not in self._blocked)
+            if prev_was_content:
+                ok = False
+
+        # Record the attribution for this boundary (read by offline tools; see _PhoneState).
+        st.last_gate = {"blocked": blocked, "prev_was_content": prev_was_content}
+
         if self.debug.enabled:
             t = getattr(result, "frame_index", "?")
             r = getattr(result, "ratio", float("nan"))
             self._log(f"[{phone}] BOUNDARY @t={t} ratio={r:.3f} | gate "
-                      f"blocked={blocked} -> {'ALERT' if ok else 'SUPPRESSED'}")
+                      f"blocked={blocked} prev_was_content={prev_was_content} "
+                      f"-> {'ALERT' if ok else 'SUPPRESSED'}")
             self._log(f"[{phone}]   recent={recent}")
+            if g.prev_window > 0:
+                self._log(f"[{phone}]   previous={previous}")
         return ok
 
     def _majority(self, labels, class_predicate):
@@ -250,8 +274,13 @@ class AdBreakMonitor:
                     device=self.device,
                     **self.cfg.clip.detector_kwargs(),
                 )
+                # The label buffer must retain enough history for both gate windows: the
+                # destination window (probe_after) and the previous window (prev_gap +
+                # prev_window). Falls back to the detector's window when those are smaller.
+                g = self._gate_cfg
+                need = (g.probe_after + g.prev_gap + g.prev_window) if g else 0
                 label_maxlen = (
-                    self.cfg.clip.past_window_size + 1 if self.use_gate else 0
+                    max(self.cfg.clip.past_window_size + 1, need) if self.use_gate else 0
                 )
                 st = _PhoneState(detector, label_maxlen)
                 self._phones[phone_number] = st

@@ -11,20 +11,16 @@
     "cooldown": 10
   },
 
-  "gate": {
-    "block_classes": ["Graphic"],
-    "confidence_threshold": 0.5,
-    "probe_after": 5
-  },
-
   "clip_gate": {
     "labels": [
-      "A photo of a commercial on TV",
-      "A photo of a TV broadcast that is not a commercial"
+      "A photo of a something that is not a football game on TV",
+      "A photo of a TV broadcast of a football game"
     ],
-    "block_labels": ["A photo of a commercial on TV"],
+    "block_labels": ["A photo of a something that is not a football game on TV"],
     "confidence_threshold": 0.5,
-    "probe_after": 5
+    "probe_after": 5,
+    "prev_window": 10,
+    "prev_gap": 0
   },
 
   "strictness": {

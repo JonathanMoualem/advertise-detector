@@ -2,10 +2,10 @@
 Loads runtime tunables from a JSON file (default: Server/config.json).
 
 Everything the ad-break detector needs to be tweaked without touching code lives here:
-which gate to use (`gate_type`: "none" / "cnn" / "clip"), the CLIP streaming-detector
-parameters, the CNN- and CLIP-gate definitions, and per-phone state housekeeping. A
-partial or missing file still runs -- file values are merged over the built-in defaults
-below (which mirror the CLIP PoC's defaults).
+whether to gate (`gate_type`: "none" / "clip"), the CLIP streaming-detector parameters,
+the CLIP-gate definition, and per-phone state housekeeping. A partial or missing file
+still runs -- file values are merged over the built-in defaults below (which mirror the
+CLIP PoC's defaults).
 """
 
 import copy
@@ -20,14 +20,11 @@ CONFIG_PATH = os.environ.get(
 )
 
 # Built-in defaults. These mirror StreamingContextDetector's constructor defaults and the
-# gate behaviour confirmed with the user (suppress uprises that land on a graphic/commercial).
-# File values override these.
+# gate behaviour confirmed with the user (suppress uprises that land on a commercial, or
+# whose previous segment was already content). File values override these.
 _DEFAULTS = {
-    # Which gate suppresses uprises: "none" / "cnn" / "clip". Left None here so an old
-    # config that only sets the legacy `use_cnn_gate` flag still resolves correctly
-    # (see load_config). A file that sets `gate_type` always wins.
-    "gate_type": None,
-    "use_cnn_gate": True,  # legacy on/off toggle, kept only for back-compat
+    # Whether to gate uprises: "none" / "clip". A file that sets `gate_type` always wins.
+    "gate_type": "clip",
     "clip": {
         "model_id": "openai/clip-vit-base-patch32",
         "past_window_size": 29,
@@ -37,11 +34,6 @@ _DEFAULTS = {
         "trigger_denoise_window": 3,
         "cooldown": 60,
     },
-    "gate": {
-        "block_classes": ["Graphic", "Commercial"],
-        "confidence_threshold": 0.5,
-        "probe_after": 5,
-    },
     "clip_gate": {
         "labels": [
             "A photo of a commercial on TV",
@@ -50,6 +42,8 @@ _DEFAULTS = {
         "block_labels": ["A photo of a commercial on TV"],
         "confidence_threshold": 0.5,
         "probe_after": 5,
+        "prev_window": 0,
+        "prev_gap": 0,
     },
     "strictness": {
         "default": "Balanced",
@@ -116,30 +110,19 @@ class ClipConfig:
 
 
 @dataclass
-class GateConfig:
-    """
-    CNN gate definition. An uprise is suppressed when the frames we just entered are
-    (confidently, by majority) one of `block_classes` — i.e. a graphic or a commercial.
-    `probe_after` is how many of the most recent frames define "what we're looking at now".
-    """
-    block_classes: List[str] = field(default_factory=lambda: ["Graphic", "Commercial"])
-    confidence_threshold: float = 0.5
-    probe_after: int = 5
-
-    @property
-    def blocked(self):
-        """The set of class names that suppress an alert (uniform with ClipGateConfig)."""
-        return set(self.block_classes)
-
-
-@dataclass
 class ClipGateConfig:
     """
     CLIP gate definition. Zero-shot CLIP matches each frame to one of `labels` (free-text
-    descriptions); an uprise is suppressed when the frames we just entered are (confidently,
-    by majority) one of `block_labels`. This mirrors GateConfig exactly — same
-    `confidence_threshold` / `probe_after` semantics and the same `blocked` set contract —
-    so the gate's majority-vote logic is identical regardless of which classifier feeds it.
+    descriptions). An uprise is suppressed in TWO complementary cases:
+
+      * DESTINATION — the most recent `probe_after` frames (the segment we just landed on)
+        are (confidently, by majority) one of `block_labels` — i.e. we rose into an ad.
+      * PREVIOUS    — the `prev_window` frames just BEFORE the uprise (skipping `prev_gap`
+        frames at the cut) were confidently NOT a block_label — i.e. the previous segment
+        was already content, so this uprise is a within-content change, not a return from a
+        break. The previous window is `labels[-(probe_after + prev_gap + prev_window) :
+        -(probe_after + prev_gap)]`. Set `prev_window = 0` to disable this check.
+
     `block_labels` should be a subset of `labels` (entries not in `labels` simply never match).
     """
     labels: List[str] = field(default_factory=lambda: [
@@ -149,10 +132,14 @@ class ClipGateConfig:
     block_labels: List[str] = field(default_factory=lambda: ["A photo of a commercial on TV"])
     confidence_threshold: float = 0.5
     probe_after: int = 5
+    # Previous-window suppression: how many frames before the uprise to inspect (0 = off),
+    # and how many frames to skip between the destination window and the previous window.
+    prev_window: int = 0
+    prev_gap: int = 0
 
     @property
     def blocked(self):
-        """The set of descriptions that suppress an alert (uniform with GateConfig)."""
+        """The set of descriptions that suppress an alert."""
         return set(self.block_labels)
 
 
@@ -191,9 +178,8 @@ class DebugConfig:
 
 @dataclass
 class AppConfig:
-    gate_type: str = "cnn"  # "none" / "cnn" / "clip"
+    gate_type: str = "clip"  # "none" / "clip"
     clip: ClipConfig = field(default_factory=ClipConfig)
-    gate: GateConfig = field(default_factory=GateConfig)
     clip_gate: ClipGateConfig = field(default_factory=ClipGateConfig)
     strictness: StrictnessConfig = field(default_factory=StrictnessConfig)
     state: StateConfig = field(default_factory=StateConfig)
@@ -226,20 +212,16 @@ def load_config(path=CONFIG_PATH):
 
     merged = _deep_merge(_DEFAULTS, raw)
 
-    # Resolve the active gate. An explicit `gate_type` always wins; otherwise fall back to
-    # the legacy boolean `use_cnn_gate` (True -> "cnn", False -> "none") so old configs work.
-    gate_type = merged.get("gate_type")
-    if gate_type is None:
-        gate_type = "cnn" if bool(merged.get("use_cnn_gate", True)) else "none"
-    gate_type = str(gate_type).strip().lower()
-    if gate_type not in ("none", "cnn", "clip"):
-        print(f"[config] Unknown gate_type {gate_type!r}; valid: none/cnn/clip. Using 'none'.")
+    # Resolve the active gate. Only "none" / "clip" are valid (the CNN gate was removed);
+    # anything else falls back to "none" so a stale config never silently mis-gates.
+    gate_type = str(merged.get("gate_type", "clip")).strip().lower()
+    if gate_type not in ("none", "clip"):
+        print(f"[config] Unknown gate_type {gate_type!r}; valid: none/clip. Using 'none'.")
         gate_type = "none"
 
     return AppConfig(
         gate_type=gate_type,
         clip=ClipConfig(**merged["clip"]),
-        gate=GateConfig(**merged["gate"]),
         clip_gate=ClipGateConfig(**merged["clip_gate"]),
         strictness=StrictnessConfig(**merged["strictness"]),
         state=StateConfig(**merged["state"]),

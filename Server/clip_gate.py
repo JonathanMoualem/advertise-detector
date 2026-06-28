@@ -4,13 +4,12 @@ CLIP zero-shot classifier for the CLIP gate.
 This is the streaming counterpart of the standalone classify.py PoC: each frame is
 matched against a fixed set of textual descriptions via CLIP's native image<->text
 matching (logits_per_image -> softmax over the labels), and the best-scoring
-description wins. It is used by AdBreakMonitor EXACTLY like the CNN VisualProcessor:
+description wins. It exposes the contract AdBreakMonitor's gate expects:
 
     classify(img) -> (label, certainty)
 
-so the gate's majority-vote suppression logic doesn't care which classifier produced
-the labels. The only difference from the CNN gate is that the "classes" here are
-free-text CLIP descriptions instead of fixed CNN class names.
+so the gate's majority-vote suppression logic only sees free-text CLIP descriptions
+turned into (label, certainty) pairs.
 
 The CLIP model + processor are SHARED with the streaming context detector (passed in by
 the monitor), so enabling the CLIP gate loads no additional model. The text features are
@@ -22,7 +21,7 @@ import torch
 
 
 class ClipGateClassifier:
-    """Zero-shot CLIP classifier with the same (label, certainty) contract as VisualProcessor."""
+    """Zero-shot CLIP classifier exposing the gate's classify(img) -> (label, certainty) contract."""
 
     def __init__(self, model, processor, labels, device="cpu"):
         if not labels:
@@ -38,8 +37,8 @@ class ClipGateClassifier:
 
         Mirrors classify.py's per-image inference: CLIP's full forward gives
         logits_per_image, softmax over the labels turns them into probabilities, and the
-        argmax label + its probability are returned — the same (class_name, certainty)
-        contract the CNN gate uses.
+        argmax label + its probability are returned — the (label, certainty) contract the
+        gate consumes.
         """
         with torch.no_grad():
             inputs = self.processor(

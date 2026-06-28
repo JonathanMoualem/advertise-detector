@@ -10,6 +10,16 @@ from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 
 
+def _pick_torch_device():
+    """Best available torch device: CUDA > MPS > CPU."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    backend = getattr(torch.backends, "mps", None)
+    if backend is not None and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def setup_clip_model(model_id="openai/clip-vit-base-patch32", device="mps"):
     """
     Initializes and returns the CLIP model and processor.
@@ -263,7 +273,7 @@ if __name__ == "__main__":
     # Frame source: a folder of images (default ./test-data), overridable via argv.
     source_dir = sys.argv[1] if len(sys.argv) > 1 else "./test-data"
 
-    device = "mps" if torch.mps.is_available() else "cpu"
+    device = _pick_torch_device()
     model, processor = setup_clip_model(device=device)
     detector = StreamingContextDetector(model, processor, device=device)
 
