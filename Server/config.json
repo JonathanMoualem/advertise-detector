@@ -3,12 +3,12 @@
 
   "clip": {
     "model_id": "openai/clip-vit-base-patch32",
-    "past_window_size": 10,
-    "visual_smooth_window": 10,
+    "past_window_size": 5,
+    "visual_smooth_window": 5,
     "min_ratio": 1.15,
     "reference_window": 120,
     "trigger_denoise_window": 3,
-    "cooldown": 60
+    "cooldown": 10
   },
 
   "gate": {
