@@ -118,7 +118,7 @@ class StreamingContextDetector:
         min_ratio=1.28,              # STRICT gate: flag when cur >= min_ratio * reference-window median
         reference_window=120,        # trailing window of raw scores -> median baseline (also gates warm-up)
         trigger_denoise_window=3,    # short trailing avg of the score used in the decision (noise robustness)
-        cooldown=60,                 # min frames between two transition flags
+        cooldown=60,                 # min frames between two ACCEPTED flags (see confirm_boundary)
     ):
         self.model = model
         self.processor = processor
@@ -140,7 +140,8 @@ class StreamingContextDetector:
         self._plot_smooth = deque(maxlen=visual_smooth_window)       # plotted smoothed line (visual only)
         self._trigger_denoise = deque(maxlen=trigger_denoise_window)  # light de-noise for the decision
         self._baseline = deque(maxlen=reference_window)              # trailing raw scores -> median baseline
-        self._last_boundary = -(10 ** 9)
+        self._last_boundary = -(10 ** 9)   # cooldown anchor; advanced only by confirm_boundary (accepted)
+        self._armed = True                 # re-arm hysteresis: ready to flag the next uprise
 
         # History for the final graph.
         self.history_frames = []
@@ -182,15 +183,24 @@ class StreamingContextDetector:
         # min_ratio times its robust (median) trailing baseline. A ratio (rather than an
         # absolute rise) keeps the trigger meaningful across content with different
         # baseline similarity levels.
+        #
+        # Two guards stop the same rise from re-firing: a re-arm hysteresis (the signal must
+        # fall back below the trigger before another uprise can flag) and the cooldown. The
+        # cooldown is anchored to _last_boundary, which the CALLER advances only for an
+        # ACCEPTED cross (confirm_boundary) — so a gate-suppressed uprise neither starts the
+        # cooldown nor blocks the next, possibly real, uprise, while the hysteresis still
+        # prevents a suppressed rise from flagging on every frame.
         is_boundary = False
         ratio = 1.0
         if len(self._baseline) >= self.reference_window // 2:
             median = float(np.median(np.fromiter(self._baseline, dtype=float)))
             if median > 0:
                 ratio = cur / median
-            if ratio >= self.min_ratio and (decision_index - self._last_boundary) > self.cooldown:
+            if ratio < self.min_ratio:
+                self._armed = True   # signal back at baseline -> ready for the next uprise
+            elif self._armed and (decision_index - self._last_boundary) > self.cooldown:
                 is_boundary = True
-                self._last_boundary = decision_index
+                self._armed = False  # disarm until the signal drops below the trigger again
                 self.boundaries.append(decision_index)
         # Append AFTER deciding so a point never biases its own baseline.
         self._baseline.append(score)
@@ -200,6 +210,18 @@ class StreamingContextDetector:
         self.history_smoothed.append(smoothed)
 
         return FrameResult(decision_index, score, smoothed, ratio, is_boundary)
+
+    def confirm_boundary(self, frame_index):
+        """
+        Arm the cooldown from an ACCEPTED boundary.
+
+        process_frame() flags an uprise whenever the signal rises (then disarms until it
+        falls back below the trigger), but it does NOT start the cooldown itself. The caller
+        decides whether the flagged cross survived its gate and, only then, calls this to
+        advance the cooldown anchor — so a suppressed cross neither starts the cooldown nor
+        blocks the next, possibly real, uprise.
+        """
+        self._last_boundary = frame_index
 
     def plot(self, title=None):
         """
@@ -285,6 +307,7 @@ if __name__ == "__main__":
         names.append(name)
         result = detector.process_frame(frame)
         if result is not None and result.is_boundary:
+            detector.confirm_boundary(result.frame_index)  # no gate here: every uprise is "accepted"
             print(f"Transition (uprise) at frame {result.frame_index} "
                   f"[{names[result.frame_index]}] "
                   f"| ratio={result.ratio:.3f} (x baseline) score={result.score:.3f}")

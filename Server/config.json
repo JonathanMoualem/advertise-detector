@@ -8,19 +8,19 @@
     "min_ratio": 1.15,
     "reference_window": 120,
     "trigger_denoise_window": 3,
-    "cooldown": 10
+    "cooldown": 20
   },
 
   "clip_gate": {
     "labels": [
-      "A photo of a something that is not a football game on TV",
-      "A photo of a TV broadcast of a football game"
+      "A photo of a commercial on TV",
+      "A photo of a TV broadcast that is not a commercial"
     ],
-    "block_labels": ["A photo of a something that is not a football game on TV"],
+    "block_labels": ["A photo of a commercial on TV"],
     "confidence_threshold": 0.5,
     "probe_after": 5,
-    "prev_window": 10,
-    "prev_gap": 0
+    "prev_window": 5,
+    "prev_gap": 15
   },
 
   "strictness": {

@@ -94,7 +94,8 @@ class ClipConfig:
     # Short trailing average of the score used as the ratio's numerator. 1 = use the raw current
     # score (no de-noising); higher = more robust to a single noisy frame, but slightly laggier.
     trigger_denoise_window: int = 3
-    # Minimum number of frames between two consecutive uprise flags.
+    # Minimum number of frames between two ACCEPTED uprise flags. A gate-suppressed cross
+    # does not start the cooldown, so it never blocks the next (possibly real) uprise.
     cooldown: int = 60
 
     def detector_kwargs(self):

@@ -125,12 +125,18 @@ class AdBreakMonitor:
                 return False
 
             if not self.use_gate:
+                accepted = True  # pure CLIP mode: every uprise alerts
                 if self.debug.enabled:
                     self._log(f"[{phone_number}] BOUNDARY @t={result.frame_index} "
                               f"ratio={result.ratio:.3f} -> ALERT (gate off)")
-                return True  # pure CLIP mode: every uprise alerts
+            else:
+                accepted = self._gate_pass(st, phone_number, result)
 
-            return self._gate_pass(st, phone_number, result)
+            # Arm the cooldown only on an ACCEPTED cross, so a gate-suppressed uprise does
+            # not block the next, possibly real, one.
+            if accepted:
+                st.detector.confirm_boundary(result.frame_index)
+            return accepted
 
     # ------------------------------------------------------------------ gate
 
