@@ -1,15 +1,20 @@
-
 """
 Main entry point for the TV Detector Client application.
 Orchestrates the interaction between the UI, camera, image processing, and network modules.
 """
 
+import json
+import os
+import time
 import tkinter as tk
+
 import cv2
-from login_window import LoginWindow
-from main_ui import MainUI
-from camera_manager import CameraManager
+
+from Alerting.Alerts import USER_CONFIG_FILE
+from Alerting.PhoneConnectorUI import PhoneConnector
+from Client.camera_manager import CameraManager
 from image_processor import ImageProcessor
+from main_ui import MainUI
 from network_manager import NetworkManager
 
 # --- Constants ---
@@ -23,7 +28,9 @@ MODE_PARAMS = {
     "Balanced": (3, 10),
     "Aggressive": (10, 2)
 }
+
 DEFAULT_MODE = "Balanced"
+
 
 class AppController:
     """
@@ -32,7 +39,7 @@ class AppController:
     def __init__(self, master, phone_number):
         self.master = master
         self.phone_number = phone_number
-        
+
         # --- Modules ---
         self.camera = CameraManager()
         self.processor = ImageProcessor(display_size=(DISPLAY_WIDTH, DISPLAY_HEIGHT))
@@ -43,15 +50,14 @@ class AppController:
         self.frame_counter = 0
         self.is_capturing_phase = True
         self.frames_to_send, self.frames_to_wait = MODE_PARAMS[DEFAULT_MODE]
+        self.last_notification_check = 0
 
         # --- UI Initialization ---
         self.ui = MainUI(self.master, self.get_callbacks())
         
         # --- Start ---
-        print("Attempting to open camera...")
         self.camera.open_camera()
-        print("Camera open attempt finished.")
-        
+
         self.ui.status_label.config(text=f"Logged in as: {self.phone_number} | Camera Active")
         self.master.after(REFRESH_DELAY_MS, self.update)
 
@@ -79,6 +85,14 @@ class AppController:
                 self.ui.show_message("No Video Signal")
         else:
             self.ui.show_message(f"Camera {self.camera.video_source_index} Unavailable\nClick 'Switch Camera'")
+        
+        # Poll for notifications every 5 seconds
+        current_time = time.time()
+        if current_time - self.last_notification_check > 5:
+            notifications = self.network.get_notifications(self.phone_number)
+            for notif in notifications:
+                self.ui.show_notification_popup(notif['message'])
+            self.last_notification_check = current_time
         
         self.master.after(REFRESH_DELAY_MS, self.update)
 
@@ -122,11 +136,11 @@ class AppController:
         """Toggles the automatic capture process on/off."""
         self.is_running = not self.is_running
         if self.is_running:
-            self.ui.btn_toggle.config(text="Stop Capturing", bg="red", fg="black")
+            self.ui.btn_toggle.config(text="⏸ Stop Capturing", bg="#ff4444", fg="white")
             self.frame_counter = 0
             self.is_capturing_phase = True
         else:
-            self.ui.btn_toggle.config(text="Start Capturing", bg="green", fg="black")
+            self.ui.btn_toggle.config(text="▶ Start Capturing", bg="#128C7E", fg="white")
 
     def switch_camera(self):
         """Switches to the next available camera source."""
@@ -173,15 +187,38 @@ class AppController:
         """Placeholder for end pan event."""
         pass
 
-if __name__ == '__main__':
-    # Step 1: Create and run the login window first.
-    login = LoginWindow()
-    phone_number = login.run() # This will block until the login window is closed.
 
-    # Step 2: Only if login was successful, create and run the main app.
+
+def get_phone_number():
+    """
+        Reads the user's phone number from the config file. If not found, returns unknown
+    """
+    phone_number = None
+
+    if os.path.exists(USER_CONFIG_FILE):
+        try:
+            with open(USER_CONFIG_FILE, "r") as f:
+                config_data = json.load(f)
+                phone_number = config_data.get("user_number")
+        except Exception as e:
+            print(f"Error reading config file: {e}")
+
+    return phone_number
+
+
+if __name__ == '__main__':
+    # Step 1: Create and run the phone connector window.
+    login_root = tk.Tk()
+    phone_connector = PhoneConnector(login_root)
+    login_root.mainloop()
+    
+    # Step 2: Read the phone number from the config file.
+    phone_number = get_phone_number()
+    
+    # Step 3: Only if phone number was obtained, create and run the main app.
     if phone_number:
         root = tk.Tk()
         app = AppController(root, phone_number)
         root.mainloop()
     else:
-        print("Login cancelled. Exiting.")
+        print("Phone number not set. Exiting.")

@@ -1,0 +1,31 @@
+services:
+  detector:
+    build:
+      context: .
+      dockerfile: Server/Dockerfile
+    ports:
+      - "6000:6000"
+    env_file:
+      - .env
+    environment:
+      - ADVERTISE_UPLOADS_DIR=/app/uploads
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Diagnostic CLIP plots (saved on "stop capturing") land here on the host.
+      - ./debug-plots:/app/debug-plots
+      # Mount config so edits take effect on `docker compose up` (restart) — no rebuild needed.
+      - ./Server/config.json:/app/config.json:ro
+
+  web:
+    build:
+      context: .
+      dockerfile: Client/Dockerfile
+    ports:
+      - "443:443"
+    environment:
+      DETECTOR_URL: http://detector:6000
+      PORT: 443
+    volumes:
+      - /etc/ssl/cs:/cert:ro
+    depends_on:
+      - detector

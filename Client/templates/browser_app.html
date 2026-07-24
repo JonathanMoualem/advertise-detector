@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>adetector — stop watching ads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+
+<body>
+  {% set wa_link = "https://wa.me/" ~ twilio_number_plain ~ "?text=" ~ (sandbox_code|urlencode) %}
+
+  <div id="toast-host"></div>
+
+  <!-- =================== SCREEN 1: Connect =================== -->
+  <section id="panel-setup" class="panel">
+    <div class="connect">
+      <div class="connect-left">
+        <div>
+          <span class="kicker">Step 1 of 2 · Connect</span>
+          <h1>Connect WhatsApp to <em>get pinged</em> when your show is back.</h1>
+        </div>
+        <p class="sub">
+          Send a one-time join message to our WhatsApp sandbox. We'll text you on the same
+          thread the moment the ad break ends.
+        </p>
+
+        <div class="steplist">
+          <div class="step">
+            <div class="num">1</div>
+            <div>
+              Scan the QR with your phone (or tap to open WhatsApp).
+              <span class="meta">Opens chat with <b id="twilio-display">{{ twilio_number_display }}</b></span>
+            </div>
+          </div>
+          <div class="step">
+            <div class="num">2</div>
+            <div>
+              Send the message exactly as it appears.
+              <span class="meta">message: <b class="mono">{{ sandbox_code }}</b></span>
+            </div>
+          </div>
+          <div class="step">
+            <div class="num">3</div>
+            <div>
+              Enter your number and click <b>I've sent it</b>. We'll match your number and unlock the detector.
+            </div>
+          </div>
+        </div>
+
+        <div class="phone-row">
+          <label for="phone-input">Your phone number</label>
+          <input id="phone-input" type="tel" placeholder="+972501234567" autocomplete="tel" />
+        </div>
+
+        <div class="button-row">
+          <button type="button" id="btn-continue-setup" class="btn primary lg">I've sent it →</button>
+          <a id="wa-link" class="btn ghost lg" href="{{ wa_link }}" target="_blank" rel="noopener">Open WhatsApp</a>
+        </div>
+      </div>
+
+      <div class="connect-right">
+        <span class="kicker">Scan with your phone</span>
+        <div class="qr-card">
+          <div class="qr" aria-label="WhatsApp sandbox QR code">
+            <img
+              class="sandbox-qrcode"
+              src="{{ url_for('sandbox_qr') }}"
+              width="240"
+              height="240"
+              alt="QR code: open WhatsApp with the sandbox message pre-filled"
+            />
+          </div>
+          <div class="qr-caption">wa.me · twilio sandbox</div>
+        </div>
+
+        <div class="divider-or">or copy the message</div>
+
+        <div class="sandbox-line">
+          <span class="muted">send</span>
+          <span>"{{ sandbox_code }}"</span>
+          <span class="muted">to</span>
+          <span>{{ twilio_number_display }}</span>
+          <button type="button" class="copy" id="btn-copy-sandbox">Copy</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== SCREEN 2: Detector =================== -->
+  <section id="panel-monitor" class="panel panel-monitor hidden">
+    <header class="top-bar">
+      <a class="brand" href="#" onclick="return false;">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>adetector</span>
+      </a>
+      <div class="top-bar-meta">
+        <span id="status-chip" class="chip good">Camera ready</span>
+        <span class="sep"></span>
+        <span id="status-text" class="mono" style="font-size: 13px;">Initializing…</span>
+        <button type="button" id="btn-logout" class="btn secondary sm">Change number</button>
+      </div>
+    </header>
+
+    <div class="detector">
+      <div class="start-bar">
+        <button type="button" id="btn-toggle" class="btn primary lg">▶ Start Capturing</button>
+      </div>
+
+      <div class="stage">
+        <div class="viewfinder">
+          <video id="video" playsinline muted autoplay></video>
+          <canvas id="view" width="640" height="480"></canvas>
+          <div id="rec-indicator" class="rec hidden"><span class="rec-dot"></span>REC</div>
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <div class="control-group">
+          <h3 class="panel-title">
+            Strictness<span class="help-tip" tabindex="0" role="img" aria-label="What does strictness mean?"><img class="help-icon" src="{{ url_for('static', filename='questionmark.png') }}" alt="" aria-hidden="true" /><span class="tip-box" role="tooltip">The strictness configuration allows you to modify the behavior of the ad break detection algorithm. More strictness means more chance of missing your show's start, but less strictness means more chance of getting an alert for something that isn't your show. Hover over the options for more info.</span></span>
+          </h3>
+          <div id="strict-modes" class="seg"></div>
+        </div>
+        <div class="control-group">
+          <h3 class="panel-title">TV box size</h3>
+          <div class="box-sliders">
+            <label class="slider-row" for="box-width">
+              <span>Width</span>
+              <input type="range" id="box-width" min="0.2" max="0.95" step="0.01" value="0.6" />
+              <span id="box-width-val" class="slider-val mono">60%</span>
+            </label>
+            <label class="slider-row" for="box-height">
+              <span>Height</span>
+              <input type="range" id="box-height" min="0.2" max="0.95" step="0.01" value="0.6" />
+              <span id="box-height-val" class="slider-val mono">60%</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    window.__TV_DETECTOR_CFG__ = {
+      sandbox_code: {{ sandbox_code | tojson }},
+      twilio_plain: {{ twilio_number_plain | tojson }},
+      notificationPollMs: 5000,
+      tickMs: 15,
+    };
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+
+</html>
